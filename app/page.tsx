@@ -1,93 +1,27 @@
-"use client";
-
-import { useState } from "react";
+import Link from "next/link";
 
 /**
- * 動作確認用の簡易ページ。
- * 仕様書8章の5画面（企業管理／AIインタビュー／進捗／引継書プレビュー／出力）は
- * 優先順位2以降で実装する。ここでは /api/interview/process の疎通確認のみを行う。
+ * トップページ。優先順位2の4画面（AIインタビュー→進捗→プレビュー→出力）への
+ * 導線のみを提供する。企業管理画面（優先順位3以降）は未実装。
  */
 export default function Home() {
-  const [transcript, setTranscript] = useState("");
-  const [round, setRound] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [response, setResponse] = useState<unknown>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setResponse(null);
-    try {
-      const res = await fetch("/api/interview/process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, interview_round: round }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? `HTTP ${res.status}`);
-      } else {
-        setResponse(data);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "不明なエラー");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
-      <h1>HIKITSUGI AI — 動作確認用</h1>
+    <main style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
+      <h1>HIKITSUGI AI</h1>
       <p style={{ color: "#555" }}>
-        /api/interview/process の疎通確認用の簡易フォームです。本番UI（5画面）は別途実装します。
+        退職・異動者へのAIインタビューから、5営業日以内に引継書パッケージを作成します。
       </p>
-      <form onSubmit={handleSubmit}>
-        <label style={{ display: "block", marginBottom: 8 }}>
-          インタビュー回数（interview_round）
-          <input
-            type="number"
-            min={1}
-            max={3}
-            value={round}
-            onChange={(e) => setRound(Number(e.target.value))}
-            style={{ display: "block", width: 80, marginTop: 4 }}
-          />
-        </label>
-        <label style={{ display: "block", marginBottom: 8 }}>
-          文字起こし本文
-          <textarea
-            value={transcript}
-            onChange={(e) => setTranscript(e.target.value)}
-            rows={12}
-            style={{ display: "block", width: "100%", marginTop: 4 }}
-            placeholder="Web会議の文字起こしを貼り付けてください"
-          />
-        </label>
-        <button type="submit" disabled={loading || transcript.trim().length === 0}>
-          {loading ? "処理中..." : "送信"}
-        </button>
-      </form>
-
-      {error && (
-        <p style={{ color: "crimson", marginTop: 16 }}>エラー: {error}</p>
-      )}
-
-      {response != null && (
-        <pre
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: "#f5f5f5",
-            overflowX: "auto",
-            fontSize: 12,
-          }}
-        >
-          {JSON.stringify(response, null, 2)}
-        </pre>
-      )}
+      <ol style={{ lineHeight: 2 }}>
+        <li>
+          <Link href="/interview">AIインタビュー</Link> — 文字起こしを入力して構造化する
+        </li>
+        <li>進捗 — 各業務の充足率スコアを確認する（インタビュー完了後に遷移）</li>
+        <li>引継書プレビュー — 内容を確認・修正する</li>
+        <li>出力 — Word / PDFでダウンロードする</li>
+      </ol>
+      <p style={{ fontSize: 13, color: "#777" }}>
+        企業管理画面は未実装です（優先順位3以降）。
+      </p>
     </main>
   );
 }

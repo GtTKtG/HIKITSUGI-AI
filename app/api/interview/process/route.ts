@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ProcessInterviewRequestSchema } from "@/lib/schema";
 import { processInterviewTranscript, InterviewProcessingError } from "@/lib/anthropic";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { computeOverallScore } from "@/lib/scoring";
 
 export const runtime = "nodejs";
 
@@ -79,10 +80,4 @@ export async function POST(req: NextRequest) {
     overall_score: overallScore,
     result,
   });
-}
-
-function computeOverallScore(scores: number[]): number | null {
-  if (scores.length === 0) return null;
-  const sum = scores.reduce((acc, s) => acc + s, 0);
-  return Math.round(sum / scores.length);
 }
