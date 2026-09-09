@@ -23,6 +23,40 @@ export class SubmissionsUnavailableError extends Error {
   }
 }
 
+/**
+ * 処理済みの結果を interview_submissions に1行保存する。
+ * バッチ版（/api/interview/process）・チャット版（/api/interview/chat/turn 完了時）の
+ * 両方から使う共通の保存先。DB未設定時は null を返す（呼び出し元で許容する）。
+ */
+export async function createSubmission(params: {
+  companyName?: string | null;
+  employeeName?: string | null;
+  interviewRound: number;
+  transcript: string;
+  result: InterviewResult;
+}): Promise<InterviewSubmissionRow | null> {
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return null;
+
+  const overallScore = computeOverallScore(params.result.businesses.map((b) => b.score));
+
+  const { data, error } = await supabase
+    .from("interview_submissions")
+    .insert({
+      company_name: params.companyName ?? null,
+      employee_name: params.employeeName ?? null,
+      interview_round: params.interviewRound,
+      transcript: params.transcript,
+      result: params.result,
+      overall_score: overallScore,
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as InterviewSubmissionRow;
+}
+
 export async function getSubmission(id: string): Promise<InterviewSubmissionRow | null> {
   const supabase = getSupabaseServerClient();
   if (!supabase) throw new SubmissionsUnavailableError();

@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ProcessInterviewRequestSchema } from "@/lib/schema";
 import { processInterviewTranscript, InterviewProcessingError } from "@/lib/anthropic";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { computeOverallScore } from "@/lib/scoring";
+import { createSubmission } from "@/lib/supabase/submissions";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/interview/process
  *
- * 仕様書 7.3 の「バックエンドサーバー」に相当する唯一のエンドポイント（優先順位1）。
+ * バッチ版AIインタビュー（新仕様書7.3「モニター期間の代替運用」）。
  * 文字起こし本文（＋インタビュー回数）を受け取り、Claude に構造化させ、
  * DB接続が設定されていれば結果を保存し、フロントエンドにJSONを返す。
+ * チャット版（/api/interview/chat/turn）が本線だが、こちらも並行して残す。
  *
  * 再質問後の2回目・3回目は、interview_round をインクリメントして同じ形式で
  * 再送する（呼び出し側の責務）。
@@ -49,35 +50,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "予期しないエラーが発生しました" }, { status: 500 });
   }
 
-  const overallScore = computeOverallScore(result.businesses.map((b) => b.score));
-
-  const supabase = getSupabaseServerClient();
   let submissionId: string | null = null;
-  if (supabase) {
-    const { data, error } = await supabase
-      .from("interview_submissions")
-      .insert({
-        company_name: company_name ?? null,
-        employee_name: employee_name ?? null,
-        interview_round,
-        transcript,
-        result,
-        overall_score: overallScore,
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      // DB保存に失敗しても、解析結果自体はフロントエンドへ返す（保存は付随機能）。
-      console.error("[interview/process] failed to persist submission", error);
-    } else {
-      submissionId = data?.id ?? null;
-    }
+  try {
+    const submission = await createSubmission({
+      companyName: company_name,
+      employeeName: employee_name,
+      interviewRound: interview_round,
+      transcript,
+      result,
+    });
+    submissionId = submission?.id ?? null;
+  } catch (err) {
+    // DB保存に失敗しても、解析結果自体はフロントエンドへ返す（保存は付随機能）。
+    console.error("[interview/process] failed to persist submission", err);
   }
 
   return NextResponse.json({
     submission_id: submissionId,
-    overall_score: overallScore,
+    overall_score: computeOverallScore(result.businesses.map((b) => b.score)),
     result,
   });
 }

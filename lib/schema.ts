@@ -74,3 +74,53 @@ export const ProcessInterviewRequestSchema = z.object({
 });
 
 export type ProcessInterviewRequest = z.infer<typeof ProcessInterviewRequestSchema>;
+
+/* ------------------------------------------------------------------ */
+/* チャット版AIインタビュー（新仕様書 5章・7章）                         */
+/* ------------------------------------------------------------------ */
+
+/** 会話履歴の1メッセージ。Claudeへ毎ターン渡す（7.1）。 */
+export const ChatMessageSchema = z.object({
+  role: z.enum(["assistant", "user"]),
+  content: z.string(),
+});
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
+/**
+ * チャット完了時にAIがまとめて出力する構造化データ（仕様書7.2）。
+ * バッチ版（InterviewResultSchema）と異なり、ターンごとにその場で聞き返すため
+ * re_questions / interview_round は持たない。
+ */
+export const ChatInterviewResultSchema = z.object({
+  businesses: z.array(BusinessSchema),
+  unfinished_cases: z.array(UnfinishedCaseSchema),
+  closing_message: z.string().nullable(),
+});
+export type ChatInterviewResult = z.infer<typeof ChatInterviewResultSchema>;
+
+/**
+ * ターンごとにClaudeが返す応答の型。会話継続中は type: "question"、
+ * 全業務・未完了案件・クロージングまで終わったら type: "done" で
+ * 7.2のJSONを一緒に返す。
+ */
+export const ChatTurnResponseSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("question"),
+    message: z.string(),
+  }),
+  z.object({
+    type: z.literal("done"),
+    message: z.string(),
+    result: ChatInterviewResultSchema,
+  }),
+]);
+export type ChatTurnResponse = z.infer<typeof ChatTurnResponseSchema>;
+
+/** POST /api/interview/chat/turn のリクエストボディ */
+export const ChatTurnRequestSchema = z.object({
+  session_id: z.string().uuid().optional(),
+  message: z.string().optional(),
+  company_name: z.string().optional(),
+  employee_name: z.string().optional(),
+});
+export type ChatTurnRequest = z.infer<typeof ChatTurnRequestSchema>;

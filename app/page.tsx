@@ -13,14 +13,16 @@ export default function Home() {
       </p>
       <ol style={{ lineHeight: 2 }}>
         <li>
-          <Link href="/interview">AIインタビュー</Link> — 文字起こしを入力して構造化する
+          <Link href="/interview">AIインタビュー</Link> — 対象者がAIと直接チャットして答える
         </li>
         <li>進捗 — 各業務の充足率スコアを確認する（インタビュー完了後に遷移）</li>
         <li>引継書プレビュー — 内容を確認・修正する</li>
         <li>出力 — Word / PDFでダウンロードする</li>
       </ol>
       <p style={{ fontSize: 13, color: "#777" }}>
-        企業管理画面は未実装です（優先順位3以降）。
+        企業管理画面は未実装です（優先順位3以降）。運営者が代理入力する場合は
+        <Link href="/interview/transcript">文字起こし方式の画面</Link>
+        も利用できます。
       </p>
     </main>
   );
