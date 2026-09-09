@@ -72,5 +72,7 @@ export const HIKITSUGI_CHAT_SYSTEM_PROMPT = `あなたは HIKITSUGI AI のイン
 - insufficient_items の値は次の英語キーのいずれかを使うこと：
   "frequency", "trigger", "steps", "judgment", "exception", "failure", "stakeholders", "systems"
 - 情報を絶対に捏造しないこと。不明な項目は null または空配列とする。
+- message等の文字列内で改行したい場合は、"\n" という文字（バックスラッシュ+n）ではなく、
+  実際の改行文字を使うこと。
 - 最初のターン（対象者からの発言がまだない状態）では、挨拶と「まず、担当されている
   業務を一覧で教えてください」という質問を type: "question" で返すこと。`;

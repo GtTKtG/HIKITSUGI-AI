@@ -184,7 +184,27 @@ function extractToolInput(response: Anthropic.Message, toolName: string): unknow
   if (!block) {
     throw new InterviewProcessingError("Claude がツール呼び出しで応答しませんでした");
   }
-  return block.input;
+  return normalizeEscapedText(block.input);
+}
+
+/**
+ * Claude が改行のつもりで、実際の改行文字ではなく `\n` という2文字（バックスラッシュ+n）を
+ * そのまま出力することがあるため、tool の入力（文字列すべて）を再帰的に正規化する。
+ * `\r\n` `\t` も同様に扱う。
+ */
+function normalizeEscapedText(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+  }
+  if (Array.isArray(value)) {
+    return value.map(normalizeEscapedText);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, normalizeEscapedText(v)])
+    );
+  }
+  return value;
 }
 
 /**
