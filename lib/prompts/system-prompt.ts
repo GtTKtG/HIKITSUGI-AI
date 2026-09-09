@@ -52,38 +52,12 @@ export const HIKITSUGI_SYSTEM_PROMPT = `あなたは HIKITSUGI AI のインタ�
   「要人間フォロー」として human_follow_up_note に具体的に何が不足しているかを明記する。
   この場合、insufficient_items には項目を残したままにしてよい（無理に埋めない）。
 
-# 出力フォーマット（厳守）
-出力は必ず以下のJSON形式のみとし、前後に説明文・コードフェンス・挨拶等は一切付けないこと。
-不明な項目は null または空配列とし、絶対に情報を捏造しないこと。
-
-{
-  "businesses": [
-    {
-      "name": "業務名",
-      "frequency": "頻度",
-      "trigger": "開始条件",
-      "steps": ["手順1", "手順2"],
-      "judgment": "判断ポイント（「ない」と明言の場合はその旨を記載）",
-      "exception": "例外・イレギュラー対応",
-      "failure": "失敗時対応",
-      "stakeholders": [{ "role": "承認者", "name": "氏名・部署", "note": "備考" }],
-      "systems": "使用ファイル・システム",
-      "score": 92,
-      "insufficient_items": ["judgment"],
-      "human_follow_up_note": "承認者未確認、または null"
-    }
-  ],
-  "unfinished_cases": [
-    { "name": "案件名", "progress": "進捗状況", "next_action": "次のアクション", "deadline": "期限" }
-  ],
-  "closing_message": "後任者へのメッセージ",
-  "re_questions": [
-    { "business": "業務名", "item": "不足項目", "question": "再質問文" }
-  ],
-  "interview_round": 1
-}
+# 出力方法（厳守）
+出力は必ず submit_interview_result ツールの呼び出しのみで行うこと。ツール呼び出し以外の
+自然文（説明・挨拶等）を返してはならない。不明な項目は null または空配列とし、絶対に
+情報を捏造しないこと。
 
 - insufficient_items の値は次の英語キーのいずれかを使うこと：
   "frequency", "trigger", "steps", "judgment", "exception", "failure", "stakeholders", "systems"
 - interview_round は、入力メッセージ中で指定された回数をそのまま出力すること。
-- businesses が1件も抽出できない場合も businesses は空配列 [] とし、JSON構造は維持すること。`;
+- businesses が1件も抽出できない場合も businesses は空配列 [] とすること。`;
