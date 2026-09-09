@@ -1,6 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { HIKITSUGI_SYSTEM_PROMPT } from "@/lib/prompts/system-prompt";
-import { InterviewResultSchema, type InterviewResult } from "@/lib/schema";
+import { HIKITSUGI_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system-prompt";
+import {
+  InterviewResultSchema,
+  type InterviewResult,
+  ChatTurnResponseSchema,
+  type ChatTurnResponse,
+  type ChatMessage,
+} from "@/lib/schema";
 
 /**
  * バックエンドの構成（仕様書 7.3）
@@ -80,6 +87,67 @@ export async function processInterviewTranscript(params: {
   }
 
   const result = InterviewResultSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new InterviewProcessingError(
+      `Claude の応答が期待するスキーマと一致しません: ${result.error.message}`,
+      result.error
+    );
+  }
+
+  return result.data;
+}
+
+/**
+ * チャット版AIインタビュー（仕様書5章・7.1・7.2）の1ターンを処理する。
+ * これまでの会話履歴（messages）に、対象者の新しい発言（userMessage、初回はなし）を
+ * 加えて Claude に渡し、次の質問（question）または完了時の構造化データ（done）を返す。
+ */
+export async function runChatTurn(params: {
+  history: ChatMessage[];
+  userMessage?: string;
+}): Promise<ChatTurnResponse> {
+  const { history, userMessage } = params;
+  const anthropic = getClient();
+
+  const messages: Anthropic.MessageParam[] = history.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+  if (userMessage) {
+    messages.push({ role: "user", content: userMessage });
+  }
+  if (messages.length === 0) {
+    // 最初のターン：対象者の発言がまだないため、開始を促す短いメッセージを送る。
+    messages.push({ role: "user", content: "（インタビューを開始してください）" });
+  }
+
+  let response;
+  try {
+    response = await anthropic.messages.create({
+      model: DEFAULT_MODEL,
+      max_tokens: 8192,
+      system: HIKITSUGI_CHAT_SYSTEM_PROMPT,
+      messages,
+    });
+  } catch (err) {
+    throw new InterviewProcessingError("Anthropic API の呼び出しに失敗しました", err);
+  }
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new InterviewProcessingError("Claude からテキスト応答が得られませんでした");
+  }
+
+  const raw = extractJson(textBlock.text);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new InterviewProcessingError("Claude の応答をJSONとして解析できませんでした", err);
+  }
+
+  const result = ChatTurnResponseSchema.safeParse(parsed);
   if (!result.success) {
     throw new InterviewProcessingError(
       `Claude の応答が期待するスキーマと一致しません: ${result.error.message}`,

@@ -1,59 +1,73 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+interface DisplayMessage {
+  role: "assistant" | "user";
+  content: string;
+}
 
 /**
- * 仕様書8章 画面2「AIインタビュー」。
- * Day1運用（音声インタビュー＋文字起こし）で得られたテキストを貼り付け／入力する。
- * 画面側は入力受付のみでよい、という仕様書の指定通り、文字起こしのアップロードは
- * テキスト貼り付けとファイル読み込み（.txt）のみをサポートする。
+ * 仕様書8章 画面2「AIインタビュー」（新仕様：チャット版）。
+ * 対象者本人がAIと直接チャットしながら、1問ずつ答えてインタビューを完了する
+ * （5章・7.1・7.2）。文字起こしのアップロードは不要。
  */
-export default function InterviewPage() {
+export default function ChatInterviewPage() {
   const router = useRouter();
+  const [started, setStarted] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [employeeName, setEmployeeName] = useState("");
-  const [round, setRound] = useState(1);
-  const [transcript, setTranscript] = useState("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    setTranscript(text);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function callTurn(payload: {
+    session_id?: string;
+    message?: string;
+    company_name?: string;
+    employee_name?: string;
+  }) {
+    const res = await fetch("/api/interview/chat/turn", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+    return data as {
+      session_id: string;
+      done: boolean;
+      message: string;
+      submission_id?: string | null;
+    };
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSend(e: React.FormEvent) {
     e.preventDefault();
+    if (!sessionId || !input.trim()) return;
+    const userText = input.trim();
+    setMessages((prev) => [...prev, { role: "user", content: userText }]);
+    setInput("");
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/interview/process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript,
-          interview_round: round,
-          company_name: companyName || undefined,
-          employee_name: employeeName || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      if (data.submission_id) {
-        router.push(`/progress/${data.submission_id}`);
-      } else {
-        // DB未設定のため保存先IDがない場合は結果をその場に表示する。
-        setError(null);
-        alert(
-          "Supabaseが未設定のため保存できませんでした。処理結果:\n\n" +
-            JSON.stringify(data.result, null, 2)
-        );
+      const data = await callTurn({ session_id: sessionId, message: userText });
+      setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
+      if (data.done) {
+        setDone(true);
+        if (data.submission_id) {
+          setTimeout(() => router.push(`/progress/${data.submission_id}`), 1500);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "不明なエラー");
@@ -62,63 +76,124 @@ export default function InterviewPage() {
     }
   }
 
-  return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
-      <h1>AIインタビュー</h1>
-      <p style={{ color: "#555" }}>
-        Day1のWeb会議インタビューの文字起こしを貼り付けてください。再質問への回答を反映する場合は、
-        インタビュー回数を増やして再送してください（最大3回）。
-      </p>
-      <form onSubmit={handleSubmit}>
-        <Field label="会社名（任意）">
-          <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} style={inputStyle} />
-        </Field>
-        <Field label="対象者氏名（任意）">
-          <input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} style={inputStyle} />
-        </Field>
-        <Field label="インタビュー回数">
-          <input
-            type="number"
-            min={1}
-            max={3}
-            value={round}
-            onChange={(e) => setRound(Number(e.target.value))}
-            style={{ ...inputStyle, width: 80 }}
-          />
-        </Field>
-        <Field label="文字起こしファイル（.txt、任意）">
-          <input type="file" accept=".txt" onChange={handleFile} />
-        </Field>
-        <Field label="文字起こし本文">
-          <textarea
-            value={transcript}
-            onChange={(e) => setTranscript(e.target.value)}
-            rows={14}
-            style={{ ...inputStyle, fontFamily: "monospace" }}
-            placeholder="Web会議の文字起こしを貼り付けてください"
-          />
-        </Field>
-        <button type="submit" disabled={loading || transcript.trim().length === 0}>
-          {loading ? "処理中..." : "送信して構造化する"}
-        </button>
-      </form>
-      {error && <p style={{ color: "crimson", marginTop: 16 }}>エラー: {error}</p>}
-    </main>
-  );
-}
+  async function handleStart(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await callTurn({
+        company_name: companyName || undefined,
+        employee_name: employeeName || undefined,
+      });
+      setSessionId(data.session_id);
+      setMessages([{ role: "assistant", content: data.message }]);
+      setStarted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "不明なエラー");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  if (!started) {
+    return (
+      <main style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
+        <h1>AIインタビュー</h1>
+        <p style={{ color: "#555" }}>
+          このままAIとチャットしながら、担当業務の引き継ぎ内容をお答えください。
+          1問ずつ質問しますので、思い出しながらで大丈夫です。
+        </p>
+        <form onSubmit={handleStart}>
+          <label style={{ display: "block", marginBottom: 12 }}>
+            <span style={{ display: "block", fontWeight: "bold", marginBottom: 4 }}>会社名（任意）</span>
+            <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} style={inputStyle} />
+          </label>
+          <label style={{ display: "block", marginBottom: 12 }}>
+            <span style={{ display: "block", fontWeight: "bold", marginBottom: 4 }}>お名前（任意）</span>
+            <input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} style={inputStyle} />
+          </label>
+          <button type="submit" disabled={loading}>
+            {loading ? "開始しています..." : "インタビューを始める"}
+          </button>
+        </form>
+        {error && <p style={{ color: "crimson", marginTop: 16 }}>エラー: {error}</p>}
+        <p style={{ fontSize: 13, color: "#777", marginTop: 24 }}>
+          運営者が代理入力する場合は
+          <Link href="/interview/transcript">文字起こし方式の画面</Link>
+          もご利用いただけます。
+        </p>
+      </main>
+    );
+  }
+
   return (
-    <label style={{ display: "block", marginBottom: 12 }}>
-      <span style={{ display: "block", marginBottom: 4, fontWeight: "bold" }}>{label}</span>
-      {children}
-    </label>
+    <main style={{ maxWidth: 640, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", height: "100vh", boxSizing: "border-box" }}>
+      <h1 style={{ marginBottom: 8 }}>AIインタビュー</h1>
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          padding: 16,
+          marginBottom: 12,
+          background: "#fafafa",
+        }}
+      >
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+              marginBottom: 10,
+            }}
+          >
+            <div
+              style={{
+                maxWidth: "80%",
+                padding: "8px 12px",
+                borderRadius: 12,
+                background: m.role === "user" ? "#2e7d32" : "#fff",
+                color: m.role === "user" ? "#fff" : "#000",
+                border: m.role === "user" ? "none" : "1px solid #ddd",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {m.content}
+            </div>
+          </div>
+        ))}
+        {done && (
+          <p style={{ textAlign: "center", color: "#2e7d32", fontWeight: "bold" }}>
+            インタビューが完了しました。進捗画面に移動します…
+          </p>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {!done && (
+        <form onSubmit={handleSend} style={{ display: "flex", gap: 8 }}>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="回答を入力..."
+            style={{ ...inputStyle, flex: 1 }}
+            disabled={loading}
+          />
+          <button type="submit" disabled={loading || !input.trim()}>
+            {loading ? "…" : "送信"}
+          </button>
+        </form>
+      )}
+      {error && <p style={{ color: "crimson", marginTop: 8 }}>エラー: {error}</p>}
+    </main>
   );
 }
 
 const inputStyle: React.CSSProperties = {
   display: "block",
   width: "100%",
-  padding: 6,
+  padding: 8,
   boxSizing: "border-box",
 };
