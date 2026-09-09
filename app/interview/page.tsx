@@ -52,8 +52,16 @@ export default function ChatInterviewPage() {
     };
   }
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
+  function handleTextareaKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Enterで送信、Shift+Enterで改行（箇条書きなど複数行の回答に対応）。
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  async function handleSend(e?: React.FormEvent) {
+    e?.preventDefault();
     if (!sessionId || !input.trim()) return;
     const userText = input.trim();
     setMessages((prev) => [...prev, { role: "user", content: userText }]);
@@ -173,12 +181,14 @@ export default function ChatInterviewPage() {
       </div>
 
       {!done && (
-        <form onSubmit={handleSend} style={{ display: "flex", gap: 8 }}>
-          <input
+        <form onSubmit={handleSend} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="回答を入力..."
-            style={{ ...inputStyle, flex: 1 }}
+            onKeyDown={handleTextareaKeyDown}
+            placeholder="回答を入力...（複数行可。Shift+Enterで改行、Enterで送信）"
+            rows={3}
+            style={{ ...inputStyle, flex: 1, resize: "vertical", fontFamily: "inherit" }}
             disabled={loading}
           />
           <button type="submit" disabled={loading || !input.trim()}>
