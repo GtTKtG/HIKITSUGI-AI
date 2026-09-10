@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { parseSpreadsheetFile, SpreadsheetParseError } from "@/lib/parseSpreadsheetFile";
 
 interface DisplayMessage {
   role: "assistant" | "user";
@@ -27,7 +28,9 @@ export default function ChatInterviewPage() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [parsingFile, setParsingFile] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -109,14 +112,42 @@ export default function ChatInterviewPage() {
   }
 
   function handleDrop(e: React.DragEvent<HTMLTextAreaElement>) {
-    // Excel等のファイルをドラッグ＆ドロップすると、対策をしていないとブラウザが
+    // 対策をしていないと、ファイルをドラッグ＆ドロップした際にブラウザが
     // そのファイルをタブごと開こうとして固まったように見えるため、ここで防ぐ。
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       e.preventDefault();
-      setError(
-        "ファイルの添付には対応していません。Excel等の内容は、該当箇所をコピーしてこの欄にテキストとして貼り付けてください。"
-      );
+      void handleFileAttach(e.dataTransfer.files[0]);
     }
+  }
+
+  /**
+   * Excel（.xlsx/.xls）またはCSVファイルの内容をテキスト化し、回答欄に差し込む。
+   * 送信前に対象者が内容を確認・編集できるよう、自動送信はしない。
+   */
+  async function handleFileAttach(file: File | undefined) {
+    if (!file) return;
+    setParsingFile(true);
+    setError(null);
+    try {
+      const text = await parseSpreadsheetFile(file);
+      setInput((prev) => (prev.trim() ? `${prev}\n\n${text}` : text));
+    } catch (err) {
+      setError(
+        err instanceof SpreadsheetParseError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : "ファイルの読み込みに失敗しました"
+      );
+    } finally {
+      setParsingFile(false);
+    }
+  }
+
+  function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    void handleFileAttach(e.target.files?.[0]);
+    // 同じファイルを続けて選び直せるよう、選択状態をリセットする。
+    e.target.value = "";
   }
 
   async function handleSend(e?: React.FormEvent) {
@@ -254,20 +285,37 @@ export default function ChatInterviewPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleTextareaKeyDown}
             onDrop={handleDrop}
-            placeholder="回答を入力...（複数行可。Shift+Enterで改行、Enterで送信）"
+            placeholder="回答を入力...（複数行可。Shift+Enterで改行、Enterで送信。Excel/CSVファイルをドラッグ＆ドロップも可）"
             rows={3}
-            maxLength={4000}
+            maxLength={20000}
             style={{ ...inputStyle, flex: 1, resize: "vertical", fontFamily: "inherit" }}
-            disabled={loading}
+            disabled={loading || parsingFile}
           />
-          <button type="submit" disabled={loading || !input.trim()}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleFileInputChange}
+            style={{ display: "none" }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || parsingFile}
+            title="Excel（.xlsx/.xls）またはCSVファイルを読み込んで回答欄に貼り付けます"
+          >
+            {parsingFile ? "読込中…" : "📎 ファイル"}
+          </button>
+          <button type="submit" disabled={loading || parsingFile || !input.trim()}>
             {loading ? "…" : "送信"}
           </button>
         </form>
       )}
       {!done && (
         <p style={{ fontSize: 12, color: "#999", marginTop: 4 }}>
-          ※ ファイルの添付には対応していません。Excel等の内容は該当箇所をコピーしてテキストで貼り付けてください。
+          ※ Excel（.xlsx/.xls）・CSVファイルは「📎 ファイル」ボタンまたは回答欄へのドラッグ＆ドロップで取り込めます。
+          内容はこの端末内でテキストに変換され、回答欄に貼り付けられます（送信前に内容を確認・編集できます）。
+          その他の形式のファイルは対応していないため、該当箇所をコピーしてテキストで貼り付けてください。
         </p>
       )}
       {error && <p style={{ color: "crimson", marginTop: 8 }}>エラー: {error}</p>}
