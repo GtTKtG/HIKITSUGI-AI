@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSubmission, SubmissionsUnavailableError } from "@/lib/supabase/submissions";
+import { getCurrentAuth, canAccessSubmission } from "@/lib/authServer";
 import { PreviewEditor } from "./PreviewEditor";
 
 /**
@@ -23,6 +24,9 @@ export default async function PreviewPage({ params }: { params: { id: string } }
   }
 
   if (!submission) notFound();
+
+  const auth = await getCurrentAuth();
+  if (!canAccessSubmission(auth, submission.id)) notFound();
 
   return <PreviewEditor submission={submission} />;
 }

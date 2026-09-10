@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSubmission, SubmissionsUnavailableError } from "@/lib/supabase/submissions";
+import { getCurrentAuth, canAccessSubmission } from "@/lib/authServer";
 
 /**
  * 仕様書8章 画面5「出力」。
@@ -23,6 +24,9 @@ export default async function ExportPage({ params }: { params: { id: string } })
   }
 
   if (!submission) notFound();
+
+  const auth = await getCurrentAuth();
+  if (!canAccessSubmission(auth, submission.id)) notFound();
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>

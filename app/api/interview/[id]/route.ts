@@ -5,6 +5,7 @@ import {
   updateSubmissionResult,
   SubmissionsUnavailableError,
 } from "@/lib/supabase/submissions";
+import { getCurrentAuth, canAccessSubmission } from "@/lib/authServer";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   try {
     const submission = await getSubmission(params.id);
     if (!submission) {
+      return NextResponse.json({ error: "指定されたインタビュー結果が見つかりません" }, { status: 404 });
+    }
+    const auth = await getCurrentAuth();
+    if (!canAccessSubmission(auth, submission.id)) {
       return NextResponse.json({ error: "指定されたインタビュー結果が見つかりません" }, { status: 404 });
     }
     return NextResponse.json({ submission });
@@ -45,6 +50,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   try {
+    const existing = await getSubmission(params.id);
+    if (!existing) {
+      return NextResponse.json({ error: "指定されたインタビュー結果が見つかりません" }, { status: 404 });
+    }
+    const auth = await getCurrentAuth();
+    if (!canAccessSubmission(auth, existing.id)) {
+      return NextResponse.json({ error: "指定されたインタビュー結果が見つかりません" }, { status: 404 });
+    }
     const submission = await updateSubmissionResult(params.id, parsed.data);
     return NextResponse.json({ submission });
   } catch (err) {

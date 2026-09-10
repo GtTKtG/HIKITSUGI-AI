@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSubmission, SubmissionsUnavailableError } from "@/lib/supabase/submissions";
 import { computeCategoryBreakdown } from "@/lib/scoring";
+import { getCurrentAuth, canAccessSubmission } from "@/lib/authServer";
 
 /**
  * 仕様書8章 画面3「進捗」。
@@ -20,6 +21,9 @@ export default async function ProgressPage({ params }: { params: { id: string } 
   }
 
   if (!submission) notFound();
+
+  const auth = await getCurrentAuth();
+  if (!canAccessSubmission(auth, submission.id)) notFound();
 
   const { result } = submission;
   const breakdown = computeCategoryBreakdown(result.businesses);

@@ -16,6 +16,8 @@ interface DisplayMessage {
  */
 export default function ChatInterviewPage() {
   const router = useRouter();
+  const [checking, setChecking] = useState(true);
+  const [isGrantUser, setIsGrantUser] = useState(false);
   const [started, setStarted] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [employeeName, setEmployeeName] = useState("");
@@ -30,6 +32,41 @@ export default function ChatInterviewPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // 顧客固有コードでアクセスしている場合は、会社名・対象者名の入力を省略して
+  // 自動的にインタビューを開始する（既に完了済みなら進捗画面へ）。
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.kind === "grant") {
+          setIsGrantUser(true);
+          if (data.submission_id) {
+            router.push(`/progress/${data.submission_id}`);
+            return;
+          }
+          setLoading(true);
+          const turn = await callTurn({});
+          if (cancelled) return;
+          setSessionId(turn.session_id);
+          setMessages([{ role: "assistant", content: turn.message }]);
+          setStarted(true);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "不明なエラー");
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function callTurn(payload: {
     session_id?: string;
@@ -101,6 +138,14 @@ export default function ChatInterviewPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (checking) {
+    return (
+      <main style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
+        <p style={{ color: "#777" }}>読み込み中...</p>
+      </main>
+    );
   }
 
   if (!started) {

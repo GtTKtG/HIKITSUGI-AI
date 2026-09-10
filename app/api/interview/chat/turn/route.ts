@@ -7,8 +7,9 @@ import {
   updateChatSessionMessages,
   completeChatSession,
 } from "@/lib/supabase/chatSessions";
-import { createSubmission } from "@/lib/supabase/submissions";
-import { SubmissionsUnavailableError } from "@/lib/supabase/submissions";
+import { createSubmission, SubmissionsUnavailableError } from "@/lib/supabase/submissions";
+import { linkGrantChatSession, linkGrantSubmission } from "@/lib/grants";
+import { getCurrentAuth } from "@/lib/authServer";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,9 @@ export const runtime = "nodejs";
  * チャット版AIインタビュー（新仕様書5章・7.1・7.2）の1ターンを処理する。
  *
  * - session_id を渡さない最初の呼び出しで新しいセッションを作成し、AIからの
- *   最初の質問を返す。
+ *   最初の質問を返す。顧客固有コード（access_grants）でアクセス中の場合、
+ *   会社名・対象者名はそのコードに登録済みの値を使い、そのコードにセッションを
+ *   紐付ける（以後そのコードでしか続きにアクセスできない）。
  * - 以降は session_id と対象者の発言（message）を渡して呼ぶ。
  * - AIが全項目の聞き取りを終えたら（type: "done"）、結果を interview_submissions に
  *   保存し、submission_id を返す。呼び出し側はそのIDで /progress/[id] 等へ遷移する。
@@ -42,9 +45,33 @@ export async function POST(req: NextRequest) {
   const { session_id, message, company_name, employee_name } = parsed.data;
 
   try {
-    const session = session_id
-      ? await getChatSession(session_id)
-      : await createChatSession({ companyName: company_name, employeeName: employee_name });
+    const auth = await getCurrentAuth();
+    if (auth.kind === "none") {
+      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+    }
+
+    let session;
+    if (session_id) {
+      session = await getChatSession(session_id);
+      // 顧客固有コードでアクセス中の場合、自分に紐づくセッション以外は続けられない
+      // （他人のセッションIDを知っていても継続できないようにする）。
+      if (auth.kind === "grant" && session && session.id !== auth.grant.chat_session_id) {
+        return NextResponse.json({ error: "このインタビューにはアクセスできません" }, { status: 403 });
+      }
+    } else if (auth.kind === "grant" && auth.grant.chat_session_id) {
+      // 顧客固有コードに既にセッションが紐付いている場合はそれを継続する
+      // （同じコードで複数のインタビューを開始できないようにする）。
+      session = await getChatSession(auth.grant.chat_session_id);
+    } else {
+      const names =
+        auth.kind === "grant"
+          ? { companyName: auth.grant.company_name ?? undefined, employeeName: auth.grant.employee_name ?? undefined }
+          : { companyName: company_name, employeeName: employee_name };
+      session = await createChatSession(names);
+      if (auth.kind === "grant") {
+        await linkGrantChatSession(auth.grant.id, session.id);
+      }
+    }
 
     if (!session) {
       return NextResponse.json({ error: "指定されたセッションが見つかりません" }, { status: 404 });
@@ -85,6 +112,9 @@ export async function POST(req: NextRequest) {
 
     if (submission) {
       await completeChatSession(session.id, submission.id);
+      if (auth.kind === "grant") {
+        await linkGrantSubmission(auth.grant.id, submission.id);
+      }
     }
 
     return NextResponse.json({

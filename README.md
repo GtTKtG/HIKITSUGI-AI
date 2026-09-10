@@ -24,15 +24,19 @@
   完了時に `interview_submissions` へ結果を書き出す。進捗／プレビュー／出力画面は
   `interview_submissions` を共通で参照する）。**チャット・バッチとも、結果をIDで
   引き直す画面遷移があるため Supabase 設定が必須**
-- 簡易アクセスゲート（`ACCESS_CODE` 環境変数）：運営者・対象者で共有する1つの
-  合言葉を `/login` で入力するとCookieが発行され、以後アクセスできる
-  （`middleware.ts` / `lib/auth.ts`）。企業ごとの個別ログインではないため、
-  本番で複数顧客のデータを扱う前には仕様書4章に沿った本格的な認証への
-  置き換えが必要
+- **アクセス制御（2階層）**：
+  - 運営者用マスターコード（`ACCESS_CODE` 環境変数）：`/admin`（案件管理）などの
+    運営者専用画面にアクセスするためのコード
+  - 顧客ごとの固有アクセスコード（`access_grants` テーブル）：運営者が `/admin` で
+    案件（会社名・対象者名）を登録すると自動発行される。対象者はこのコード付きの
+    URL（`/enter/<code>`）にアクセスすると、自分の案件のインタビュー・結果
+    （進捗／プレビュー／出力）のみを閲覧・操作できる（他の顧客のデータは見えない）
+  - 入金確認後、運営者が `/admin` で案件を作成し、発行されたURLを対象者にメールで
+    送る運用を想定（`middleware.ts` / `lib/auth.ts` / `lib/authServer.ts` / `lib/grants.ts`）
 
-**未実装（優先順位3以降）**：企業管理画面、認証、顧客データの分離・保存期間設定・
-削除機能（本番の顧客データを扱う前に必須、仕様書4章）。音声によるヒアリングは
-仕様書上も将来検討・今回対象外。PDFの日本語描画には
+**未実装（優先順位3以降）**：企業管理画面の本格版（現状は案件作成・一覧のみの簡易版）、
+保存期間設定・削除機能（本番の顧客データを扱う前に必須、仕様書4章）。音声による
+ヒアリングは仕様書上も将来検討・今回対象外。PDFの日本語描画には
 IPAゴシック（`assets/fonts/ipag.ttf`、IPAフォントライセンスv1.0で再配布可）を同梱している。
 
 ## セットアップ
@@ -42,9 +46,13 @@ npm install
 cp .env.example .env.local
 # .env.local に ANTHROPIC_API_KEY を設定
 # 進捗／プレビュー/出力画面を使うには SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY も設定
-# 未設定だと誰でもアクセスできてしまうため、ACCESS_CODE も設定する（本番では必須）
+# 未設定だと誰でもアクセスできてしまうため、ACCESS_CODE（運営者用）も設定する（本番では必須）
 npm run dev
 ```
+
+運営者としてログインするには `/login` で `ACCESS_CODE` の値を入力する。ログイン後
+`/admin` で案件（会社名・対象者名）を作成すると、その案件専用のアクセスコード・URL
+（`/enter/<code>`）が発行されるので、それを対象者にメールで送る。
 
 Supabase を使う場合は `supabase/migrations/` 配下のマイグレーションを番号順に対象の
 プロジェクトへ適用し、`.env.local` に `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`
@@ -60,6 +68,16 @@ Supabase を使う場合は `supabase/migrations/` 配下のマイグレーシ�
 ```
 
 ## API
+
+### `GET /api/admin/grants` / `POST /api/admin/grants`（運営者専用）
+
+案件の一覧取得・新規作成。`POST` は `{ company_name?, employee_name? }` を受け取り、
+固有コードを発行した `grant` を返す。
+
+### `GET /enter/<code>`
+
+顧客固有コードでのワンクリック入場リンク。正しければCookieを発行し、
+未着手なら `/interview`、完了済みなら `/progress/[id]` へリダイレクトする。
 
 ### `POST /api/interview/chat/turn`（チャット版・本線）
 

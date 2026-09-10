@@ -32,12 +32,14 @@ function LoginForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setError(data.error ?? "ログインに失敗しました");
         return;
       }
-      const next = searchParams.get("next") || "/";
+      // 顧客固有コードの場合はAPIが遷移先（インタビュー or 進捗画面）を返す。
+      // 運営者用マスターコードの場合は next パラメータ（元々見ようとしていたページ）へ。
+      const next = data.redirect || searchParams.get("next") || "/";
       router.push(next);
       router.refresh();
     } catch (err) {
@@ -50,7 +52,7 @@ function LoginForm() {
   return (
     <main style={{ maxWidth: 360, margin: "80px auto", padding: 24 }}>
       <h1 style={{ fontSize: 20 }}>HIKITSUGI AI</h1>
-      <p style={{ color: "#555", fontSize: 14 }}>担当者から共有された合言葉を入力してください。</p>
+      <p style={{ color: "#555", fontSize: 14 }}>メール等で共有されたアクセスコードを入力してください。</p>
       <form onSubmit={handleSubmit}>
         <input
           type="password"

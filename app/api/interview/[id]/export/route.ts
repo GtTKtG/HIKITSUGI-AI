@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSubmission, SubmissionsUnavailableError } from "@/lib/supabase/submissions";
+import { getCurrentAuth, canAccessSubmission } from "@/lib/authServer";
 import { buildHandoverDocx } from "@/lib/export/docx";
 import { buildHandoverPdf } from "@/lib/export/pdf";
 
@@ -33,6 +34,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   if (!submission) {
+    return NextResponse.json({ error: "指定されたインタビュー結果が見つかりません" }, { status: 404 });
+  }
+
+  const auth = await getCurrentAuth();
+  if (!canAccessSubmission(auth, submission.id)) {
     return NextResponse.json({ error: "指定されたインタビュー結果が見つかりません" }, { status: 404 });
   }
 
