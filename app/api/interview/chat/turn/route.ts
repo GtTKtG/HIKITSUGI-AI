@@ -80,6 +80,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "このインタビューはすでに完了しています" }, { status: 409 });
     }
 
+    // 対象者の発言（message）が無いのに、既にAIが1問以上質問済みのセッションを
+    // 再開しようとしている場合（画面の再読み込み等）は、Claudeを呼ばずに直前の
+    // 質問をそのまま返す。ここでAPIを呼んでしまうと、会話履歴がAIの発言で
+    // 終わった状態になり「conversation must end with a user message」エラーになる。
+    if (!message && session.messages.length > 0) {
+      const lastAssistantMessage = [...session.messages].reverse().find((m) => m.role === "assistant");
+      return NextResponse.json({
+        session_id: session.id,
+        done: false,
+        message: lastAssistantMessage?.content ?? "続きから、直前の質問にお答えください。",
+        history: session.messages,
+      });
+    }
+
     let turn;
     try {
       turn = await runChatTurn({ history: session.messages, userMessage: message });

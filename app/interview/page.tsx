@@ -48,13 +48,24 @@ export default function ChatInterviewPage() {
             router.push(`/progress/${data.submission_id}`);
             return;
           }
-          setLoading(true);
-          const turn = await callTurn({});
-          if (cancelled) return;
-          setSessionId(turn.session_id);
-          setMessages([{ role: "assistant", content: turn.message }]);
-          setStarted(true);
-          setLoading(false);
+          if (data.session_id && Array.isArray(data.messages) && data.messages.length > 0) {
+            // 進行中のインタビューがある（再読み込み等）。会話履歴をそのまま復元し、
+            // Claudeへの再問い合わせは行わない。
+            setSessionId(data.session_id);
+            setMessages(
+              data.messages.map((m: DisplayMessage) => ({ role: m.role, content: m.content }))
+            );
+            setStarted(true);
+          } else {
+            // 初回：まだ何も質問していないので、最初の質問を取得する。
+            setLoading(true);
+            const turn = await callTurn({});
+            if (cancelled) return;
+            setSessionId(turn.session_id);
+            setMessages([{ role: "assistant", content: turn.message }]);
+            setStarted(true);
+            setLoading(false);
+          }
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "不明なエラー");
