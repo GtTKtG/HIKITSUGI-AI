@@ -24,7 +24,11 @@
   完了時に `interview_submissions` へ結果を書き出す。進捗／プレビュー／出力画面は
   `interview_submissions` を共通で参照する）。**チャット・バッチとも、結果をIDで
   引き直す画面遷移があるため Supabase 設定が必須**
-- 認証は未実装（最小限）
+- 簡易アクセスゲート（`ACCESS_CODE` 環境変数）：運営者・対象者で共有する1つの
+  合言葉を `/login` で入力するとCookieが発行され、以後アクセスできる
+  （`middleware.ts` / `lib/auth.ts`）。企業ごとの個別ログインではないため、
+  本番で複数顧客のデータを扱う前には仕様書4章に沿った本格的な認証への
+  置き換えが必要
 
 **未実装（優先順位3以降）**：企業管理画面、認証、顧客データの分離・保存期間設定・
 削除機能（本番の顧客データを扱う前に必須、仕様書4章）。音声によるヒアリングは
@@ -38,6 +42,7 @@ npm install
 cp .env.example .env.local
 # .env.local に ANTHROPIC_API_KEY を設定
 # 進捗／プレビュー/出力画面を使うには SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY も設定
+# 未設定だと誰でもアクセスできてしまうため、ACCESS_CODE も設定する（本番では必須）
 npm run dev
 ```
 

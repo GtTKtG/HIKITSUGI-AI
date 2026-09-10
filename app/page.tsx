@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoutButton } from "./LogoutButton";
 
 /**
  * トップページ。優先順位2の4画面（AIインタビュー→進捗→プレビュー→出力）への
@@ -23,6 +24,9 @@ export default function Home() {
         企業管理画面は未実装です（優先順位3以降）。運営者が代理入力する場合は
         <Link href="/interview/transcript">文字起こし方式の画面</Link>
         も利用できます。
+      </p>
+      <p style={{ marginTop: 32 }}>
+        <LogoutButton />
       </p>
     </main>
   );
