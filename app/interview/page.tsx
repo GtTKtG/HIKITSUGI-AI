@@ -97,6 +97,17 @@ export default function ChatInterviewPage() {
     }
   }
 
+  function handleDrop(e: React.DragEvent<HTMLTextAreaElement>) {
+    // Excel等のファイルをドラッグ＆ドロップすると、対策をしていないとブラウザが
+    // そのファイルをタブごと開こうとして固まったように見えるため、ここで防ぐ。
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault();
+      setError(
+        "ファイルの添付には対応していません。Excel等の内容は、該当箇所をコピーしてこの欄にテキストとして貼り付けてください。"
+      );
+    }
+  }
+
   async function handleSend(e?: React.FormEvent) {
     e?.preventDefault();
     if (!sessionId || !input.trim()) return;
@@ -231,8 +242,10 @@ export default function ChatInterviewPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleTextareaKeyDown}
+            onDrop={handleDrop}
             placeholder="回答を入力...（複数行可。Shift+Enterで改行、Enterで送信）"
             rows={3}
+            maxLength={4000}
             style={{ ...inputStyle, flex: 1, resize: "vertical", fontFamily: "inherit" }}
             disabled={loading}
           />
@@ -240,6 +253,11 @@ export default function ChatInterviewPage() {
             {loading ? "…" : "送信"}
           </button>
         </form>
+      )}
+      {!done && (
+        <p style={{ fontSize: 12, color: "#999", marginTop: 4 }}>
+          ※ ファイルの添付には対応していません。Excel等の内容は該当箇所をコピーしてテキストで貼り付けてください。
+        </p>
       )}
       {error && <p style={{ color: "crimson", marginTop: 8 }}>エラー: {error}</p>}
     </main>

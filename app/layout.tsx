@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { GlobalDropGuard } from "./GlobalDropGuard";
 
 export const metadata: Metadata = {
   title: "HIKITSUGI AI",
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ja">
-      <body style={{ fontFamily: "sans-serif", margin: 0 }}>{children}</body>
+      <body style={{ fontFamily: "sans-serif", margin: 0 }}>
+        <GlobalDropGuard />
+        {children}
+      </body>
     </html>
   );
 }
