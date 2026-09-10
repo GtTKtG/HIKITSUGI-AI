@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { ZodType } from "zod";
 import { HIKITSUGI_SYSTEM_PROMPT } from "@/lib/prompts/system-prompt";
 import { HIKITSUGI_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system-prompt";
 import {
@@ -207,6 +208,67 @@ function normalizeEscapedText(value: unknown): unknown {
   return value;
 }
 
+const MAX_ATTEMPTS = 3;
+
+/**
+ * Claude をtool use付きで呼び出し、指定したツールの入力を zod スキーマで検証して返す。
+ * モデルが稀に enum/discriminator から外れた値等、スキーマに合わない出力をすることが
+ * あるため、失敗した場合は同じリクエストを最大 MAX_ATTEMPTS 回まで再試行する
+ * （文字起こし・会話履歴が長い/複雑な場合にまれに発生する一時的な不具合であり、
+ * 再試行すれば直ることが多い）。
+ */
+async function callToolWithRetry<T>(params: {
+  label: string;
+  request: Anthropic.MessageCreateParamsNonStreaming;
+  toolName: string;
+  schema: ZodType<T>;
+}): Promise<T> {
+  const anthropic = getClient();
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let response: Anthropic.Message;
+    try {
+      response = await anthropic.messages.create(params.request);
+    } catch (err) {
+      lastError = new InterviewProcessingError("Anthropic API の呼び出しに失敗しました", err);
+      console.error(`[${params.label}] attempt ${attempt}/${MAX_ATTEMPTS} API call failed`, err);
+      continue;
+    }
+
+    let input: unknown;
+    try {
+      input = extractToolInput(response, params.toolName);
+    } catch (err) {
+      lastError = err;
+      console.error(`[${params.label}] attempt ${attempt}/${MAX_ATTEMPTS} no tool_use block`, err);
+      continue;
+    }
+
+    const result = params.schema.safeParse(input);
+    if (result.success) {
+      return result.data;
+    }
+
+    lastError = new InterviewProcessingError(
+      `Claude の応答が期待するスキーマと一致しません: ${result.error.message}`,
+      result.error
+    );
+    // 原因調査のため、スキーマに合わなかった生の入力をログに残す
+    // （個人情報を含みうるため、長さは適度に切り詰める）。
+    console.error(
+      `[${params.label}] attempt ${attempt}/${MAX_ATTEMPTS} schema mismatch`,
+      result.error.message,
+      "raw input:",
+      JSON.stringify(input).slice(0, 2000)
+    );
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new InterviewProcessingError("Anthropic API の呼び出しに失敗しました", lastError);
+}
+
 /**
  * 文字起こし本文とインタビュー回数を Claude に渡し、仕様書7.2のJSON形式で
  * 構造化・不足検知・再質問生成・充足率スコア算出まで行った結果を返す。
@@ -216,7 +278,6 @@ export async function processInterviewTranscript(params: {
   interviewRound: number;
 }): Promise<InterviewResult> {
   const { transcript, interviewRound } = params;
-  const anthropic = getClient();
 
   const userMessage = [
     `インタビュー回数（interview_round）: ${interviewRound}`,
@@ -225,31 +286,19 @@ export async function processInterviewTranscript(params: {
     transcript,
   ].join("\n");
 
-  let response: Anthropic.Message;
-  try {
-    response = await anthropic.messages.create({
+  return callToolWithRetry({
+    label: "interview/process",
+    toolName: BATCH_TOOL_NAME,
+    schema: InterviewResultSchema,
+    request: {
       model: DEFAULT_MODEL,
       max_tokens: 8192,
       system: HIKITSUGI_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
       tools: [BATCH_TOOL],
       tool_choice: { type: "tool", name: BATCH_TOOL_NAME },
-    });
-  } catch (err) {
-    throw new InterviewProcessingError("Anthropic API の呼び出しに失敗しました", err);
-  }
-
-  const input = extractToolInput(response, BATCH_TOOL_NAME);
-
-  const result = InterviewResultSchema.safeParse(input);
-  if (!result.success) {
-    throw new InterviewProcessingError(
-      `Claude の応答が期待するスキーマと一致しません: ${result.error.message}`,
-      result.error
-    );
-  }
-
-  return result.data;
+    },
+  });
 }
 
 /**
@@ -262,7 +311,6 @@ export async function runChatTurn(params: {
   userMessage?: string;
 }): Promise<ChatTurnResponse> {
   const { history, userMessage } = params;
-  const anthropic = getClient();
 
   const messages: Anthropic.MessageParam[] = history.map((m) => ({
     role: m.role,
@@ -276,29 +324,17 @@ export async function runChatTurn(params: {
     messages.push({ role: "user", content: "（インタビューを開始してください）" });
   }
 
-  let response: Anthropic.Message;
-  try {
-    response = await anthropic.messages.create({
+  return callToolWithRetry({
+    label: "interview/chat/turn",
+    toolName: CHAT_TOOL_NAME,
+    schema: ChatTurnResponseSchema,
+    request: {
       model: DEFAULT_MODEL,
       max_tokens: 8192,
       system: HIKITSUGI_CHAT_SYSTEM_PROMPT,
       messages,
       tools: [CHAT_TOOL],
       tool_choice: { type: "tool", name: CHAT_TOOL_NAME },
-    });
-  } catch (err) {
-    throw new InterviewProcessingError("Anthropic API の呼び出しに失敗しました", err);
-  }
-
-  const input = extractToolInput(response, CHAT_TOOL_NAME);
-
-  const result = ChatTurnResponseSchema.safeParse(input);
-  if (!result.success) {
-    throw new InterviewProcessingError(
-      `Claude の応答が期待するスキーマと一致しません: ${result.error.message}`,
-      result.error
-    );
-  }
-
-  return result.data;
+    },
+  });
 }
