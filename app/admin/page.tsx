@@ -110,6 +110,7 @@ export default function AdminPage() {
                 <th style={{ padding: 8 }}>会社名</th>
                 <th style={{ padding: 8 }}>対象者</th>
                 <th style={{ padding: 8 }}>状態</th>
+                <th style={{ padding: 8 }}>コード</th>
                 <th style={{ padding: 8 }}>アクセスURL</th>
                 <th style={{ padding: 8 }}>作成日時</th>
               </tr>
@@ -123,6 +124,14 @@ export default function AdminPage() {
                     <td style={{ padding: 8 }}>{g.company_name || "—"}</td>
                     <td style={{ padding: 8 }}>{g.employee_name || "—"}</td>
                     <td style={{ padding: 8 }}>{status}</td>
+                    <td style={{ padding: 8 }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <code style={{ fontSize: 13, fontWeight: "bold" }}>{g.code}</code>
+                        <button type="button" onClick={() => copy(g.code)} style={{ fontSize: 12 }}>
+                          コピー
+                        </button>
+                      </div>
+                    </td>
                     <td style={{ padding: 8 }}>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <code style={{ fontSize: 12, wordBreak: "break-all" }}>{url}</code>
@@ -142,7 +151,7 @@ export default function AdminPage() {
               })}
               {grants.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: 16, textAlign: "center", color: "#777" }}>
+                  <td colSpan={6} style={{ padding: 16, textAlign: "center", color: "#777" }}>
                     まだ案件がありません
                   </td>
                 </tr>
