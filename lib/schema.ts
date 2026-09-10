@@ -22,6 +22,25 @@ export const StakeholderSchema = z.object({
   note: z.string().nullable().optional(),
 });
 
+/**
+ * 「使用ファイル・システム」1件あたりの詳細（仕様変更：URL・ID・PW・マニュアル・
+ * 関連ファイルの保存場所まで踏み込んで聞く）。
+ *
+ * password はヒアリングで得られた値をそのまま平文で記録する運用とする
+ * （対象者・依頼企業の合意のもとでの仕様。DB・書き出しファイル・メール等に
+ * 平文で残る点は運用上の注意点として認識しておくこと）。
+ */
+export const SystemDetailSchema = z.object({
+  name: z.string(),
+  url: z.string().nullable(),
+  login_id: z.string().nullable(),
+  password: z.string().nullable(),
+  manual_location: z.string().nullable(),
+  file_location: z.string().nullable(),
+  note: z.string().nullable(),
+});
+export type SystemDetail = z.infer<typeof SystemDetailSchema>;
+
 export const BusinessSchema = z.object({
   name: z.string(),
   frequency: z.string().nullable(),
@@ -31,7 +50,10 @@ export const BusinessSchema = z.object({
   exception: z.string().nullable(),
   failure: z.string().nullable(),
   stakeholders: z.array(StakeholderSchema),
+  // システム名の一覧（旧仕様との互換用の要約。表示用に残す）
   systems: z.string().nullable(),
+  // システムごとの詳細（新規）。旧データには存在しないため、欠落時は空配列にする。
+  system_details: z.array(SystemDetailSchema).optional().default([]),
   score: z.number().min(0).max(100),
   insufficient_items: z.array(InsufficientItemSchema),
   human_follow_up_note: z.string().nullable(),

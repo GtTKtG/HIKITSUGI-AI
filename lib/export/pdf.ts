@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFPage, type PDFFont } from "pdf-lib";
-import type { InterviewResult } from "@/lib/schema";
+import type { InterviewResult, SystemDetail } from "@/lib/schema";
 
 /**
  * 引継書パッケージをPDFとして生成する。
@@ -58,6 +58,7 @@ export async function buildHandoverPdf(params: {
         : null
     );
     writer.field("使用ファイル・システム", business.systems);
+    writeSystemDetails(writer, business.system_details);
     writer.text(`充足率: ${business.score}%`, { bold: true });
     if (business.human_follow_up_note) {
       writer.text(`要人間フォロー: ${business.human_follow_up_note}`, {
@@ -86,6 +87,29 @@ export async function buildHandoverPdf(params: {
 
   const bytes = await pdfDoc.save();
   return Buffer.from(bytes);
+}
+
+/**
+ * システムごとの詳細（URL・ID・パスワード・マニュアル保管場所・関連ファイル保存場所）を
+ * 字下げして出力する。パスワードを含むため、取り扱いに注意すること
+ * （この文書はメール等で送付される想定）。
+ */
+function writeSystemDetails(writer: PdfWriter, details: SystemDetail[]) {
+  for (const d of details) {
+    writer.text(`・${d.name}`, { bold: true });
+    const fields: [string, string | null][] = [
+      ["URL", d.url],
+      ["ID", d.login_id],
+      ["パスワード", d.password],
+      ["マニュアル保管場所", d.manual_location],
+      ["関連ファイル保存場所", d.file_location],
+      ["備考", d.note],
+    ];
+    for (const [label, value] of fields) {
+      if (!value || value.trim().length === 0) continue;
+      writer.text(`　　${label}: ${value}`);
+    }
+  }
 }
 
 const PAGE_WIDTH = 595.28; // A4 pt

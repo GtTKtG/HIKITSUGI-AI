@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { InterviewResult, Business } from "@/lib/schema";
+import type { InterviewResult, Business, SystemDetail } from "@/lib/schema";
 import type { InterviewSubmissionRow } from "@/lib/supabase/submissions";
 
 export function PreviewEditor({ submission }: { submission: InterviewSubmissionRow }) {
@@ -15,6 +15,48 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
     setResult((prev) => ({
       ...prev,
       businesses: prev.businesses.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+    }));
+  }
+
+  function updateSystemDetail(businessIndex: number, systemIndex: number, patch: Partial<SystemDetail>) {
+    setResult((prev) => ({
+      ...prev,
+      businesses: prev.businesses.map((b, i) =>
+        i === businessIndex
+          ? {
+              ...b,
+              system_details: b.system_details.map((s, j) => (j === systemIndex ? { ...s, ...patch } : s)),
+            }
+          : b
+      ),
+    }));
+  }
+
+  function addSystemDetail(businessIndex: number) {
+    setResult((prev) => ({
+      ...prev,
+      businesses: prev.businesses.map((b, i) =>
+        i === businessIndex
+          ? {
+              ...b,
+              system_details: [
+                ...b.system_details,
+                { name: "", url: "", login_id: "", password: "", manual_location: "", file_location: "", note: "" },
+              ],
+            }
+          : b
+      ),
+    }));
+  }
+
+  function removeSystemDetail(businessIndex: number, systemIndex: number) {
+    setResult((prev) => ({
+      ...prev,
+      businesses: prev.businesses.map((b, i) =>
+        i === businessIndex
+          ? { ...b, system_details: b.system_details.filter((_, j) => j !== systemIndex) }
+          : b
+      ),
     }));
   }
 
@@ -109,10 +151,63 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
             onChange={(v) => updateBusiness(i, { failure: v })}
           />
           <TextField
-            label="使用ファイル・システム"
+            label="使用ファイル・システム（要約）"
             value={business.systems}
             onChange={(v) => updateBusiness(i, { systems: v })}
           />
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ display: "block", fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>
+              システムごとの詳細（URL・ID・パスワード・マニュアル・関連ファイル）
+            </span>
+            <p style={{ fontSize: 12, color: "#999", marginTop: 0, marginBottom: 6 }}>
+              ※ ここに入力した内容（パスワードを含む）はWord/PDF出力にそのまま記載されます。
+              送付方法にはご注意ください。
+            </p>
+            {business.system_details.map((sys, j) => (
+              <div key={j} style={systemCardStyle}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                  <input
+                    placeholder="システム・ファイル名"
+                    value={sys.name}
+                    onChange={(e) => updateSystemDetail(i, j, { name: e.target.value })}
+                    style={{ ...inputStyle, flex: 1, fontWeight: "bold" }}
+                  />
+                  <button type="button" onClick={() => removeSystemDetail(i, j)}>
+                    削除
+                  </button>
+                </div>
+                <SystemField
+                  label="URL"
+                  value={sys.url}
+                  onChange={(v) => updateSystemDetail(i, j, { url: v })}
+                />
+                <SystemField
+                  label="ログインID"
+                  value={sys.login_id}
+                  onChange={(v) => updateSystemDetail(i, j, { login_id: v })}
+                />
+                <SystemField
+                  label="パスワード"
+                  value={sys.password}
+                  onChange={(v) => updateSystemDetail(i, j, { password: v })}
+                />
+                <SystemField
+                  label="マニュアル保管場所"
+                  value={sys.manual_location}
+                  onChange={(v) => updateSystemDetail(i, j, { manual_location: v })}
+                />
+                <SystemField
+                  label="関連ファイル保存場所"
+                  value={sys.file_location}
+                  onChange={(v) => updateSystemDetail(i, j, { file_location: v })}
+                />
+                <SystemField label="備考" value={sys.note} onChange={(v) => updateSystemDetail(i, j, { note: v })} />
+              </div>
+            ))}
+            <button type="button" onClick={() => addSystemDetail(i)}>
+              ＋ システムを追加
+            </button>
+          </div>
           {business.human_follow_up_note && (
             <p style={{ color: "crimson" }}>要人間フォロー: {business.human_follow_up_note}</p>
           )}
@@ -197,6 +292,23 @@ function TextField({
   );
 }
 
+function SystemField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+      <span style={{ fontSize: 12, color: "#555", width: 140, flexShrink: 0 }}>{label}</span>
+      <input value={value ?? ""} onChange={(e) => onChange(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+    </label>
+  );
+}
+
 function TextAreaField({
   label,
   value,
@@ -213,6 +325,14 @@ function TextAreaField({
     </label>
   );
 }
+
+const systemCardStyle: React.CSSProperties = {
+  border: "1px solid #eee",
+  borderRadius: 6,
+  padding: 10,
+  marginBottom: 8,
+  background: "#fafafa",
+};
 
 const fieldsetStyle: React.CSSProperties = {
   border: "1px solid #ddd",

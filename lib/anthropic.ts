@@ -64,6 +64,29 @@ const insufficientItemEnum = [
   "systems",
 ];
 
+const systemDetailSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string", description: "システム・ファイル名" },
+    url: { type: ["string", "null"], description: "アクセスURL（ログインページ等）" },
+    login_id: { type: ["string", "null"], description: "ログインID・アカウント名" },
+    password: {
+      type: ["string", "null"],
+      description: "パスワード（対象者から聞き取れた場合はその値をそのまま入れる）",
+    },
+    manual_location: {
+      type: ["string", "null"],
+      description: "操作マニュアルの保管場所・ファイル名（例：共有フォルダのパス、ファイル名）",
+    },
+    file_location: {
+      type: ["string", "null"],
+      description: "そのシステムに関連するファイルの保存場所・ファイル名",
+    },
+    note: { type: ["string", "null"], description: "その他の補足（引き継ぎ時の注意点等）" },
+  },
+  required: ["name", "url", "login_id", "password", "manual_location", "file_location", "note"],
+} as const;
+
 const businessSchema = {
   type: "object",
   properties: {
@@ -87,7 +110,12 @@ const businessSchema = {
       },
       description: "関係者",
     },
-    systems: { type: ["string", "null"], description: "使用ファイル・システム" },
+    systems: { type: ["string", "null"], description: "使用ファイル・システム名の一覧（要約）" },
+    system_details: {
+      type: "array",
+      items: systemDetailSchema,
+      description: "使用ファイル・システムごとの詳細（URL・ID・パスワード・マニュアル保管場所・関連ファイル保存場所）",
+    },
     score: { type: "integer", minimum: 0, maximum: 100, description: "充足率スコア（0-100）" },
     insufficient_items: {
       type: "array",
@@ -105,6 +133,7 @@ const businessSchema = {
     "failure",
     "stakeholders",
     "systems",
+    "system_details",
     "score",
     "insufficient_items",
     "human_follow_up_note",
@@ -221,7 +250,9 @@ async function callToolWithRetry<T>(params: {
   label: string;
   request: Anthropic.MessageCreateParamsNonStreaming;
   toolName: string;
-  schema: ZodType<T>;
+  // Def/Input は any にして、system_details のように .default() で
+  // Input（省略可）と Output（常に配列）が異なるスキーマも渡せるようにする。
+  schema: ZodType<T, any, any>;
 }): Promise<T> {
   const anthropic = getClient();
   let lastError: unknown;

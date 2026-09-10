@@ -9,7 +9,7 @@ import {
   TableCell,
   WidthType,
 } from "docx";
-import type { InterviewResult } from "@/lib/schema";
+import type { InterviewResult, SystemDetail } from "@/lib/schema";
 
 /**
  * 引継書パッケージをWord（.docx）として生成する。
@@ -53,7 +53,10 @@ export async function buildHandoverDocx(params: {
               .join(" / ")
           : null
       ),
-      labeledParagraph("使用ファイル・システム", business.systems),
+      labeledParagraph("使用ファイル・システム", business.systems)
+    );
+    children.push(...buildSystemDetailParagraphs(business.system_details));
+    children.push(
       new Paragraph({
         children: [new TextRun({ text: `充足率: ${business.score}%`, bold: true })],
       })
@@ -102,6 +105,43 @@ function labeledParagraph(label: string, value: string | null): Paragraph {
       new TextRun(value && value.trim().length > 0 ? value : "（未記載）"),
     ],
   });
+}
+
+/**
+ * システムごとの詳細（URL・ID・パスワード・マニュアル保管場所・関連ファイル保存場所）を
+ * インデントした箇条書きで出力する。パスワードを含むため、取り扱いに注意すること
+ * （この文書はメール等で送付される想定）。
+ */
+function buildSystemDetailParagraphs(details: SystemDetail[]): Paragraph[] {
+  if (details.length === 0) return [];
+
+  const paragraphs: Paragraph[] = [];
+  for (const d of details) {
+    paragraphs.push(
+      new Paragraph({
+        indent: { left: 360 },
+        children: [new TextRun({ text: `・${d.name}`, bold: true })],
+      })
+    );
+    const fields: [string, string | null][] = [
+      ["URL", d.url],
+      ["ID", d.login_id],
+      ["パスワード", d.password],
+      ["マニュアル保管場所", d.manual_location],
+      ["関連ファイル保存場所", d.file_location],
+      ["備考", d.note],
+    ];
+    for (const [label, value] of fields) {
+      if (!value || value.trim().length === 0) continue;
+      paragraphs.push(
+        new Paragraph({
+          indent: { left: 720 },
+          children: [new TextRun({ text: `${label}: `, bold: true }), new TextRun(value)],
+        })
+      );
+    }
+  }
+  return paragraphs;
 }
 
 function buildUnfinishedCasesTable(cases: InterviewResult["unfinished_cases"]): Table {
