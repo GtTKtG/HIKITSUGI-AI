@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ProcessInterviewRequestSchema } from "@/lib/schema";
 import { processInterviewTranscript, InterviewProcessingError } from "@/lib/anthropic";
-import { computeOverallScore } from "@/lib/scoring";
+import { computeOverallScore, applyDeterministicScoring } from "@/lib/scoring";
 import { createSubmission } from "@/lib/supabase/submissions";
 
 export const runtime = "nodejs";
@@ -49,6 +49,10 @@ export async function POST(req: NextRequest) {
     console.error("[interview/process] unexpected error", err);
     return NextResponse.json({ error: "予期しないエラーが発生しました" }, { status: 500 });
   }
+
+  // スコア・必須ゲート判定は AI の自己申告を信用せず、insufficient_items から
+  // サーバー側で決定的に算出したもので上書きする（属人性をなくすため）。
+  result = { ...result, businesses: applyDeterministicScoring(result.businesses) };
 
   let submissionId: string | null = null;
   try {

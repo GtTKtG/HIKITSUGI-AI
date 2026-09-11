@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSubmission, SubmissionsUnavailableError } from "@/lib/supabase/submissions";
-import { computeCategoryBreakdown } from "@/lib/scoring";
+import { computeCategoryBreakdown, isHandoverComplete } from "@/lib/scoring";
 import { getCurrentAuth, canAccessSubmission } from "@/lib/authServer";
 
 /**
  * 仕様書8章 画面3「進捗」。
- * 業務ごとの充足率スコアと、カテゴリ別（業務把握／判断基準／例外対応）の
- * 充足率を表示する（仕様書の表示例：業務把握100％、判断基準70％、例外対応40％）。
+ * 業務ごとの充足率スコアと、カテゴリ別（8カテゴリ・配点100点）の充足率を表示する。
+ * 必須ゲート（重要項目の未確認）が1件でも残っている業務があれば、総合点にかかわらず
+ * 「引継未完了」であることを明示する（6章・改善方針12章）。
  */
 export default async function ProgressPage({ params }: { params: { id: string } }) {
   let submission;
@@ -29,6 +30,8 @@ export default async function ProgressPage({ params }: { params: { id: string } 
   const breakdown = computeCategoryBreakdown(result.businesses);
   const hasFollowUps = result.businesses.some((b) => b.human_follow_up_note);
   const hasReQuestions = result.re_questions.length > 0;
+  const handoverComplete = result.businesses.length > 0 && isHandoverComplete(result.businesses);
+  const gateFailedBusinesses = result.businesses.filter((b) => b.mandatory_gate_missing.length > 0);
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
@@ -38,12 +41,38 @@ export default async function ProgressPage({ params }: { params: { id: string } 
         （インタビュー {submission.interview_round} 回目）
       </p>
 
+      <div
+        style={{
+          padding: "10px 14px",
+          borderRadius: 6,
+          marginBottom: 20,
+          fontWeight: "bold",
+          background: handoverComplete ? "#e8f5e9" : "#fdecea",
+          color: handoverComplete ? "#2e7d32" : "#c62828",
+        }}
+      >
+        {handoverComplete ? "✓ 必須ゲートを満たしています（引継完了の要件を充足）" : "✗ 引継未完了（必須項目が未確認の業務があります）"}
+      </div>
+
+      {gateFailedBusinesses.length > 0 && (
+        <section style={{ marginBottom: 24 }}>
+          <h2>必須ゲート未達の業務</h2>
+          <ul>
+            {gateFailedBusinesses.map((b, i) => (
+              <li key={i}>
+                <strong>{b.name}</strong>: {b.mandatory_gate_missing.join("、")} が未確認
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section style={{ marginBottom: 24 }}>
         <h2>全体充足率</h2>
         <ScoreBar label="総合" value={submission.overall_score} />
-        <ScoreBar label="業務把握（頻度・開始条件・手順・関係者・使用ファイル）" value={breakdown.businessGrasp} />
-        <ScoreBar label="判断基準" value={breakdown.judgmentCriteria} />
-        <ScoreBar label="例外対応（例外・失敗時対応）" value={breakdown.exceptionHandling} />
+        {breakdown.map((c) => (
+          <ScoreBar key={c.key} label={`${c.label}（配点${c.weight}）`} value={c.rate} />
+        ))}
       </section>
 
       {hasReQuestions && (

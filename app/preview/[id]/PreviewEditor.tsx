@@ -41,7 +41,21 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
               ...b,
               system_details: [
                 ...b.system_details,
-                { name: "", url: "", login_id: "", password: "", manual_location: "", file_location: "", note: "" },
+                {
+                  name: "",
+                  url: "",
+                  login_id: "",
+                  password: null,
+                  login_method: "",
+                  permission: "",
+                  device_restriction: "",
+                  certificate: "",
+                  application_destination: "",
+                  proxy: "",
+                  manual_location: "",
+                  file_location: "",
+                  note: "",
+                },
               ],
             }
           : b
@@ -79,7 +93,22 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
       ...prev,
       unfinished_cases: [
         ...prev.unfinished_cases,
-        { name: "", progress: "", next_action: "", deadline: "" },
+        {
+          name: "",
+          progress: "",
+          next_action: "",
+          deadline: "",
+          purpose_scope: "",
+          open_issues: "",
+          owner: "",
+          decision_maker: "",
+          counterpart: "",
+          related_materials_location: "",
+          impact_if_neglected: "",
+          completion_condition: "",
+          completion_confirmer: "",
+          next_review_date: "",
+        },
       ],
     }));
   }
@@ -119,9 +148,19 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
         <fieldset key={i} style={fieldsetStyle}>
           <legend>
             <strong>{business.name}</strong>（充足率: {business.score}%）
+            {business.mandatory_gate_missing.length > 0 && (
+              <span style={{ color: "#c62828", fontWeight: "bold", marginLeft: 8, fontSize: 12 }}>
+                引継未完了：{business.mandatory_gate_missing.join("、")}が未確認
+              </span>
+            )}
           </legend>
           <TextField
-            label="頻度"
+            label="業務の目的・対象"
+            value={business.purpose}
+            onChange={(v) => updateBusiness(i, { purpose: v })}
+          />
+          <TextField
+            label="頻度・実施時期"
             value={business.frequency}
             onChange={(v) => updateBusiness(i, { frequency: v })}
           />
@@ -130,10 +169,20 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
             value={business.trigger}
             onChange={(v) => updateBusiness(i, { trigger: v })}
           />
+          <TextField
+            label="期限（法定・社内・着手時期）"
+            value={business.deadline}
+            onChange={(v) => updateBusiness(i, { deadline: v })}
+          />
           <TextAreaField
             label="具体的手順（1行1手順）"
             value={business.steps.join("\n")}
             onChange={(v) => updateBusiness(i, { steps: v.split("\n").filter((s) => s.trim().length > 0) })}
+          />
+          <TextAreaField
+            label="成果物・保存場所・命名規則"
+            value={business.deliverables}
+            onChange={(v) => updateBusiness(i, { deliverables: v })}
           />
           <TextAreaField
             label="判断ポイント"
@@ -157,11 +206,10 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
           />
           <div style={{ marginBottom: 8 }}>
             <span style={{ display: "block", fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>
-              システムごとの詳細（URL・ID・パスワード・マニュアル・関連ファイル）
+              システムごとの詳細
             </span>
             <p style={{ fontSize: 12, color: "#999", marginTop: 0, marginBottom: 6 }}>
-              ※ ここに入力した内容（パスワードを含む）はWord/PDF出力にそのまま記載されます。
-              送付方法にはご注意ください。
+              ※ パスワードは引継書に記載しません。会社が定める安全な方法で別途移管してください。
             </p>
             {business.system_details.map((sys, j) => (
               <div key={j} style={systemCardStyle}>
@@ -176,20 +224,41 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
                     削除
                   </button>
                 </div>
-                <SystemField
-                  label="URL"
-                  value={sys.url}
-                  onChange={(v) => updateSystemDetail(i, j, { url: v })}
-                />
+                <SystemField label="URL" value={sys.url} onChange={(v) => updateSystemDetail(i, j, { url: v })} />
                 <SystemField
                   label="ログインID"
                   value={sys.login_id}
                   onChange={(v) => updateSystemDetail(i, j, { login_id: v })}
                 />
                 <SystemField
-                  label="パスワード"
-                  value={sys.password}
-                  onChange={(v) => updateSystemDetail(i, j, { password: v })}
+                  label="利用機能・ログイン方法"
+                  value={sys.login_method}
+                  onChange={(v) => updateSystemDetail(i, j, { login_method: v })}
+                />
+                <SystemField
+                  label="権限"
+                  value={sys.permission}
+                  onChange={(v) => updateSystemDetail(i, j, { permission: v })}
+                />
+                <SystemField
+                  label="端末制限"
+                  value={sys.device_restriction}
+                  onChange={(v) => updateSystemDetail(i, j, { device_restriction: v })}
+                />
+                <SystemField
+                  label="電子証明書"
+                  value={sys.certificate}
+                  onChange={(v) => updateSystemDetail(i, j, { certificate: v })}
+                />
+                <SystemField
+                  label="申請先"
+                  value={sys.application_destination}
+                  onChange={(v) => updateSystemDetail(i, j, { application_destination: v })}
+                />
+                <SystemField
+                  label="代理者"
+                  value={sys.proxy}
+                  onChange={(v) => updateSystemDetail(i, j, { proxy: v })}
                 />
                 <SystemField
                   label="マニュアル保管場所"
@@ -208,6 +277,11 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
               ＋ システムを追加
             </button>
           </div>
+          <TextAreaField
+            label="権限移管状況（付与状況・停止日・未完了の申請）"
+            value={business.access_handover}
+            onChange={(v) => updateBusiness(i, { access_handover: v })}
+          />
           {business.human_follow_up_note && (
             <p style={{ color: "crimson" }}>要人間フォロー: {business.human_follow_up_note}</p>
           )}
@@ -217,34 +291,83 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
       <fieldset style={fieldsetStyle}>
         <legend>未完了案件</legend>
         {result.unfinished_cases.map((c, i) => (
-          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-            <input
-              placeholder="案件名"
-              value={c.name}
-              onChange={(e) => updateUnfinishedCase(i, { name: e.target.value })}
-              style={{ ...inputStyle, flex: 2 }}
+          <div key={i} style={systemCardStyle}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <input
+                placeholder="案件名"
+                value={c.name}
+                onChange={(e) => updateUnfinishedCase(i, { name: e.target.value })}
+                style={{ ...inputStyle, flex: 1, fontWeight: "bold" }}
+              />
+              <button type="button" onClick={() => removeUnfinishedCase(i)}>
+                削除
+              </button>
+            </div>
+            <SystemField
+              label="目的・対象範囲・背景"
+              value={c.purpose_scope}
+              onChange={(v) => updateUnfinishedCase(i, { purpose_scope: v })}
             />
-            <input
-              placeholder="進捗状況"
-              value={c.progress ?? ""}
-              onChange={(e) => updateUnfinishedCase(i, { progress: e.target.value })}
-              style={{ ...inputStyle, flex: 2 }}
+            <SystemField
+              label="現在のステータス"
+              value={c.progress}
+              onChange={(v) => updateUnfinishedCase(i, { progress: v })}
             />
-            <input
-              placeholder="次のアクション"
-              value={c.next_action ?? ""}
-              onChange={(e) => updateUnfinishedCase(i, { next_action: e.target.value })}
-              style={{ ...inputStyle, flex: 2 }}
+            <SystemField
+              label="未決事項・懸念・依存関係"
+              value={c.open_issues}
+              onChange={(v) => updateUnfinishedCase(i, { open_issues: v })}
             />
-            <input
-              placeholder="期限"
-              value={c.deadline ?? ""}
-              onChange={(e) => updateUnfinishedCase(i, { deadline: e.target.value })}
-              style={{ ...inputStyle, flex: 1 }}
+            <SystemField
+              label="次のアクション"
+              value={c.next_action}
+              onChange={(v) => updateUnfinishedCase(i, { next_action: v })}
             />
-            <button type="button" onClick={() => removeUnfinishedCase(i)}>
-              削除
-            </button>
+            <SystemField
+              label="次回予定日"
+              value={c.next_review_date}
+              onChange={(v) => updateUnfinishedCase(i, { next_review_date: v })}
+            />
+            <SystemField
+              label="最終期限"
+              value={c.deadline}
+              onChange={(v) => updateUnfinishedCase(i, { deadline: v })}
+            />
+            <SystemField
+              label="主担当者"
+              value={c.owner}
+              onChange={(v) => updateUnfinishedCase(i, { owner: v })}
+            />
+            <SystemField
+              label="意思決定者"
+              value={c.decision_maker}
+              onChange={(v) => updateUnfinishedCase(i, { decision_maker: v })}
+            />
+            <SystemField
+              label="相手方の窓口"
+              value={c.counterpart}
+              onChange={(v) => updateUnfinishedCase(i, { counterpart: v })}
+            />
+            <SystemField
+              label="関連資料・打合せ記録の所在"
+              value={c.related_materials_location}
+              onChange={(v) => updateUnfinishedCase(i, { related_materials_location: v })}
+            />
+            <SystemField
+              label="放置・遅延した場合の影響"
+              value={c.impact_if_neglected}
+              onChange={(v) => updateUnfinishedCase(i, { impact_if_neglected: v })}
+            />
+            <SystemField
+              label="完了条件"
+              value={c.completion_condition}
+              onChange={(v) => updateUnfinishedCase(i, { completion_condition: v })}
+            />
+            <SystemField
+              label="完了を確認する者"
+              value={c.completion_confirmer}
+              onChange={(v) => updateUnfinishedCase(i, { completion_confirmer: v })}
+            />
           </div>
         ))}
         <button type="button" onClick={addUnfinishedCase}>

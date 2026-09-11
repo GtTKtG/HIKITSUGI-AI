@@ -10,6 +10,7 @@ import {
 import { createSubmission, SubmissionsUnavailableError } from "@/lib/supabase/submissions";
 import { linkGrantChatSession, linkGrantSubmission } from "@/lib/grants";
 import { getCurrentAuth } from "@/lib/authServer";
+import { applyDeterministicScoring } from "@/lib/scoring";
 
 export const runtime = "nodejs";
 
@@ -115,13 +116,16 @@ export async function POST(req: NextRequest) {
     }
 
     // type === "done": 7.2のJSON結果を interview_submissions に保存する。
+    // スコア・必須ゲート判定は AI の自己申告を信用せず、insufficient_items から
+    // サーバー側で決定的に算出したもので上書きする（属人性をなくすため）。
+    const scoredBusinesses = applyDeterministicScoring(turn.result.businesses);
     const transcript = renderTranscript(newMessages);
     const submission = await createSubmission({
       companyName: session.company_name,
       employeeName: session.employee_name,
       interviewRound: 1,
       transcript,
-      result: { ...turn.result, re_questions: [], interview_round: 1 },
+      result: { ...turn.result, businesses: scoredBusinesses, re_questions: [], interview_round: 1 },
     });
 
     if (submission) {

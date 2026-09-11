@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFPage, type PDFFont } from "pdf-lib";
-import type { InterviewResult, SystemDetail } from "@/lib/schema";
+import type { InterviewResult, SystemDetail, UnfinishedCase } from "@/lib/schema";
+import { isHandoverComplete } from "@/lib/scoring";
 
 /**
  * 引継書パッケージをPDFとして生成する。
@@ -39,15 +40,24 @@ export async function buildHandoverPdf(params: {
 
   const writer = new PdfWriter(pdfDoc, font, boldFont);
 
+  const complete = result.businesses.length > 0 && isHandoverComplete(result.businesses);
+
   writer.heading("引継書", 20);
   writer.text(`対象者: ${employeeName ?? "未設定"}　/　所属: ${companyName ?? "未設定"}`);
+  writer.text(complete ? "引継完了（必須項目を充足）" : "引継未完了（必須項目が未確認の業務があります）", {
+    bold: true,
+    color: complete ? rgb(0.18, 0.49, 0.2) : rgb(0.78, 0.16, 0.16),
+  });
   writer.gap();
 
   for (const business of result.businesses) {
     writer.heading(business.name, 14);
-    writer.field("頻度", business.frequency);
+    writer.field("目的・対象", business.purpose);
+    writer.field("頻度・実施時期", business.frequency);
     writer.field("開始条件", business.trigger);
+    writer.field("期限", business.deadline);
     writer.field("具体的手順", business.steps.length ? business.steps.join(" → ") : null);
+    writer.field("成果物・保存場所", business.deliverables);
     writer.field("判断ポイント", business.judgment);
     writer.field("例外・イレギュラー対応", business.exception);
     writer.field("失敗時対応", business.failure);
@@ -59,7 +69,14 @@ export async function buildHandoverPdf(params: {
     );
     writer.field("使用ファイル・システム", business.systems);
     writeSystemDetails(writer, business.system_details);
+    writer.field("権限移管状況", business.access_handover);
     writer.text(`充足率: ${business.score}%`, { bold: true });
+    if (business.mandatory_gate_missing.length > 0) {
+      writer.text(`引継未完了：${business.mandatory_gate_missing.join("、")}が未確認`, {
+        bold: true,
+        color: rgb(0.78, 0.16, 0.16),
+      });
+    }
     if (business.human_follow_up_note) {
       writer.text(`要人間フォロー: ${business.human_follow_up_note}`, {
         color: rgb(0.8, 0, 0),
@@ -78,6 +95,7 @@ export async function buildHandoverPdf(params: {
           c.deadline ?? "-"
         }`
       );
+      writeUnfinishedCaseDetails(writer, c);
     }
   }
   writer.gap();
@@ -90,9 +108,9 @@ export async function buildHandoverPdf(params: {
 }
 
 /**
- * システムごとの詳細（URL・ID・パスワード・マニュアル保管場所・関連ファイル保存場所）を
- * 字下げして出力する。パスワードを含むため、取り扱いに注意すること
- * （この文書はメール等で送付される想定）。
+ * システムごとの詳細（URL・ID・ログイン方法・権限・マニュアル保管場所・関連ファイル
+ * 保存場所等）を字下げして出力する。
+ * 仕様変更：パスワードそのものは記載しない（会社が定める安全な方法で別途移管する）。
  */
 function writeSystemDetails(writer: PdfWriter, details: SystemDetail[]) {
   for (const d of details) {
@@ -100,7 +118,12 @@ function writeSystemDetails(writer: PdfWriter, details: SystemDetail[]) {
     const fields: [string, string | null][] = [
       ["URL", d.url],
       ["ID", d.login_id],
-      ["パスワード", d.password],
+      ["利用機能・ログイン方法", d.login_method],
+      ["権限", d.permission],
+      ["端末制限", d.device_restriction],
+      ["電子証明書", d.certificate],
+      ["申請先", d.application_destination],
+      ["代理者", d.proxy],
       ["マニュアル保管場所", d.manual_location],
       ["関連ファイル保存場所", d.file_location],
       ["備考", d.note],
@@ -109,6 +132,26 @@ function writeSystemDetails(writer: PdfWriter, details: SystemDetail[]) {
       if (!value || value.trim().length === 0) continue;
       writer.text(`　　${label}: ${value}`);
     }
+  }
+}
+
+/** 未完了案件の専用ヒアリング項目（目的・未決事項・主担当者等）を字下げして出力する。 */
+function writeUnfinishedCaseDetails(writer: PdfWriter, c: UnfinishedCase) {
+  const fields: [string, string | null][] = [
+    ["目的・対象範囲・背景", c.purpose_scope],
+    ["未決事項・懸念・依存関係", c.open_issues],
+    ["次回予定日", c.next_review_date],
+    ["主担当者", c.owner],
+    ["意思決定者", c.decision_maker],
+    ["相手方の窓口", c.counterpart],
+    ["関連資料・打合せ記録の所在", c.related_materials_location],
+    ["放置・遅延した場合の影響", c.impact_if_neglected],
+    ["完了条件", c.completion_condition],
+    ["完了を確認する者", c.completion_confirmer],
+  ];
+  for (const [label, value] of fields) {
+    if (!value || value.trim().length === 0) continue;
+    writer.text(`　　${label}: ${value}`);
   }
 }
 
