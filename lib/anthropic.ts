@@ -92,20 +92,9 @@ const systemDetailSchema = {
     },
     note: { type: ["string", "null"], description: "その他の補足（引き継ぎ時の注意点等）" },
   },
-  required: [
-    "name",
-    "url",
-    "login_id",
-    "login_method",
-    "permission",
-    "device_restriction",
-    "certificate",
-    "application_destination",
-    "proxy",
-    "manual_location",
-    "file_location",
-    "note",
-  ],
+  // name 以外はすべて任意（不明なら省略してよい。モデルへの出力負荷を下げ、
+  // 巨大なJSONを1回で正確に埋めきれず done への遷移に失敗する事態を避けるため）。
+  required: ["name"],
 } as const;
 
 const businessSchema = {
@@ -154,21 +143,21 @@ const businessSchema = {
     },
     human_follow_up_note: { type: ["string", "null"] },
   },
+  // 5.1で拡張した項目（purpose/deadline/deliverables/access_handover/
+  // system_details）は任意にしている。旧8項目相当は従来どおり必須のまま
+  // にして、既存の判定ロジックとの整合を保つ。required を増やしすぎると、
+  // モデルが1回の done 呼び出しで全項目を漏れなく埋めきれず、done への
+  // 遷移に失敗して質問が終わらなくなるリスクがあるため最小限にする。
   required: [
     "name",
-    "purpose",
     "frequency",
     "trigger",
-    "deadline",
     "steps",
-    "deliverables",
     "judgment",
     "exception",
     "failure",
     "stakeholders",
     "systems",
-    "system_details",
-    "access_handover",
     "score",
     "insufficient_items",
     "human_follow_up_note",
@@ -193,22 +182,8 @@ const unfinishedCaseSchema = {
     completion_confirmer: { type: ["string", "null"], description: "完了を確認する者" },
     next_review_date: { type: ["string", "null"], description: "次回予定日" },
   },
-  required: [
-    "name",
-    "progress",
-    "next_action",
-    "deadline",
-    "purpose_scope",
-    "open_issues",
-    "owner",
-    "decision_maker",
-    "counterpart",
-    "related_materials_location",
-    "impact_if_neglected",
-    "completion_condition",
-    "completion_confirmer",
-    "next_review_date",
-  ],
+  // 旧4項目のみ必須。5.2で追加した詳細項目は任意（不明なら省略してよい）。
+  required: ["name", "progress", "next_action", "deadline"],
 } as const;
 
 const BATCH_TOOL_NAME = "submit_interview_result";
