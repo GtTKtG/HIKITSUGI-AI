@@ -51,12 +51,33 @@ export async function buildHandoverDocx(params: {
 
   for (const business of result.businesses) {
     children.push(
-      new Paragraph({ text: business.name, heading: HeadingLevel.HEADING_1 }),
+      new Paragraph({ text: business.name, heading: HeadingLevel.HEADING_1 })
+    );
+    if (business.business_type) {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text:
+                business.business_type === "contextual"
+                  ? "業務タイプ：企画系（状況に応じた判断が中心。手順は典型パターンとして記載）"
+                  : "業務タイプ：管理系（定型的な手順で再現可能）",
+              italics: true,
+              color: "555555",
+            }),
+          ],
+        })
+      );
+    }
+    children.push(
       labeledParagraph("目的・対象", business.purpose),
       labeledParagraph("頻度・実施時期", business.frequency),
       labeledParagraph("開始条件", business.trigger),
       labeledParagraph("期限", business.deadline),
-      labeledParagraph("具体的手順", business.steps.length ? business.steps.join(" → ") : null),
+      labeledParagraph(
+        business.business_type === "contextual" ? "進め方（典型パターン）" : "具体的手順",
+        business.steps.length ? business.steps.join(" → ") : null
+      ),
       labeledParagraph("成果物・保存場所", business.deliverables),
       labeledParagraph("判断ポイント", business.judgment),
       labeledParagraph("例外・イレギュラー対応", business.exception),

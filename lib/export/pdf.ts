@@ -52,11 +52,22 @@ export async function buildHandoverPdf(params: {
 
   for (const business of result.businesses) {
     writer.heading(business.name, 14);
+    if (business.business_type) {
+      writer.text(
+        business.business_type === "contextual"
+          ? "業務タイプ：企画系（状況に応じた判断が中心。手順は典型パターンとして記載）"
+          : "業務タイプ：管理系（定型的な手順で再現可能）",
+        { color: rgb(0.33, 0.33, 0.33) }
+      );
+    }
     writer.field("目的・対象", business.purpose);
     writer.field("頻度・実施時期", business.frequency);
     writer.field("開始条件", business.trigger);
     writer.field("期限", business.deadline);
-    writer.field("具体的手順", business.steps.length ? business.steps.join(" → ") : null);
+    writer.field(
+      business.business_type === "contextual" ? "進め方（典型パターン）" : "具体的手順",
+      business.steps.length ? business.steps.join(" → ") : null
+    );
     writer.field("成果物・保存場所", business.deliverables);
     writer.field("判断ポイント", business.judgment);
     writer.field("例外・イレギュラー対応", business.exception);

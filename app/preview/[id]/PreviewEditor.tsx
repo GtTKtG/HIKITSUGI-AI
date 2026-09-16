@@ -154,6 +154,24 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
               </span>
             )}
           </legend>
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ display: "block", fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>
+              業務タイプ
+            </label>
+            <select
+              value={business.business_type ?? ""}
+              onChange={(e) =>
+                updateBusiness(i, {
+                  business_type: e.target.value === "" ? null : (e.target.value as "routine" | "contextual"),
+                })
+              }
+              style={inputStyle}
+            >
+              <option value="">未分類</option>
+              <option value="routine">管理系（定型）</option>
+              <option value="contextual">企画系（状況に応じた判断が中心）</option>
+            </select>
+          </div>
           <TextField
             label="業務の目的・対象"
             value={business.purpose}
@@ -175,7 +193,11 @@ export function PreviewEditor({ submission }: { submission: InterviewSubmissionR
             onChange={(v) => updateBusiness(i, { deadline: v })}
           />
           <TextAreaField
-            label="具体的手順（1行1手順）"
+            label={
+              business.business_type === "contextual"
+                ? "進め方（典型パターンを1行1パターン）"
+                : "具体的手順（1行1手順）"
+            }
             value={business.steps.join("\n")}
             onChange={(v) => updateBusiness(i, { steps: v.split("\n").filter((s) => s.trim().length > 0) })}
           />

@@ -101,6 +101,14 @@ const businessSchema = {
   type: "object",
   properties: {
     name: { type: "string", description: "業務名（成果物単位まで分解されていること）" },
+    business_type: {
+      type: ["string", "null"],
+      enum: ["routine", "contextual", null],
+      description:
+        "業務の性格分類。routine=手順を固定的に定型化しやすい業務（申請処理・定型報告等）。" +
+        "contextual=状況に応じて判断が変わり単一の正解手順に落とし込みにくい業務（企画立案・" +
+        "交渉・リーガルチェック等）。判定できない場合は null。",
+    },
     purpose: { type: ["string", "null"], description: "業務の目的・対象・位置づけ" },
     frequency: { type: ["string", "null"], description: "頻度・実施時期" },
     trigger: { type: ["string", "null"], description: "開始条件" },

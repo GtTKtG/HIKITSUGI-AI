@@ -65,8 +65,23 @@ export const SystemDetailSchema = z.object({
 });
 export type SystemDetail = z.infer<typeof SystemDetailSchema>;
 
+/**
+ * 業務の性格分類（新規）。
+ *
+ * 「管理系（routine）」＝手順を固定的に定型化しやすい業務（申請処理・定型報告・
+ * データ入力等）。「企画系（contextual）」＝状況に応じて判断が変わり、単一の
+ * 正解手順に落とし込みにくい業務（企画立案・交渉・リーガルチェック等の判断業務）。
+ * ヒアリング側（lib/prompts/*.ts）はこの分類に応じて、後者では固定手順の代わりに
+ * 判断の拠り所・典型パターン・関係者配慮を深掘りする。旧データには存在しないため
+ * nullable・任意・既定値nullで後方互換を確保する。
+ */
+export const BusinessTypeSchema = z.enum(["routine", "contextual"]);
+export type BusinessType = z.infer<typeof BusinessTypeSchema>;
+
 export const BusinessSchema = z.object({
   name: z.string(),
+  // 業務の性格分類（新規、任意）。判定できない場合は null のままでよい。
+  business_type: BusinessTypeSchema.nullable().optional().default(null),
   // 業務の目的・対象・位置づけ（新規：成果物単位まで分解された業務であることが前提）
   purpose: z.string().nullable().optional().default(null),
   frequency: z.string().nullable(),
