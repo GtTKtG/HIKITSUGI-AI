@@ -44,6 +44,7 @@ const MANDATORY_GATE_ITEMS: { item: InsufficientItem; label: string }[] = [
   { item: "deliverables", label: "成果物の保存場所" },
   { item: "systems", label: "システム権限" },
   { item: "failure", label: "緊急時の初動と連絡先" },
+  { item: "access_handover", label: "権限移管" },
 ];
 
 /** 1業務分の insufficient_items から、カテゴリごとの充足率スコア（0〜100の整数）を算出する。 */
