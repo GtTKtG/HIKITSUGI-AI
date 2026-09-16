@@ -242,14 +242,14 @@ const CHAT_TOOL: Anthropic.Tool = {
   },
 };
 
-function extractToolInput(response: Anthropic.Message, toolName: string): unknown {
+function extractToolUseBlock(response: Anthropic.Message, toolName: string): Anthropic.ToolUseBlock {
   const block = response.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === toolName
   );
   if (!block) {
     throw new InterviewProcessingError("Claude がツール呼び出しで応答しませんでした");
   }
-  return normalizeEscapedText(block.input);
+  return block;
 }
 
 /**
@@ -276,10 +276,16 @@ const MAX_ATTEMPTS = 3;
 
 /**
  * Claude をtool use付きで呼び出し、指定したツールの入力を zod スキーマで検証して返す。
- * モデルが稀に enum/discriminator から外れた値等、スキーマに合わない出力をすることが
- * あるため、失敗した場合は同じリクエストを最大 MAX_ATTEMPTS 回まで再試行する
- * （文字起こし・会話履歴が長い/複雑な場合にまれに発生する一時的な不具合であり、
- * 再試行すれば直ることが多い）。
+ * モデルが稀に必須キー（type や result 等）を省略する、enum/discriminatorから外れた
+ * 値を返す等、スキーマに合わない出力をすることがあるため、失敗した場合は最大
+ * MAX_ATTEMPTS 回まで再試行する。
+ *
+ * 仕様変更：以前は同じリクエストを「盲目的に」再送していたが、業務数が多い長い
+ * インタビューでは、モデルが何を間違えたか分からないまま毎回同程度の確率で
+ * 同種のミス（result や type の省略等）を繰り返し、3回とも失敗して
+ * タイムアウトする事例を本番で確認した。Anthropicのtool_result（is_error）を使い、
+ * 「直前の呼び出しの何が具体的に間違っていたか」をClaudeにフィードバックしてから
+ * 再試行することで、的を絞った訂正をさせ、成功率と速度を上げる。
  */
 async function callToolWithRetry<T>(params: {
   label: string;
@@ -291,26 +297,28 @@ async function callToolWithRetry<T>(params: {
 }): Promise<T> {
   const anthropic = getClient();
   let lastError: unknown;
+  const messages: Anthropic.MessageParam[] = [...params.request.messages];
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     let response: Anthropic.Message;
     try {
-      response = await anthropic.messages.create(params.request);
+      response = await anthropic.messages.create({ ...params.request, messages });
     } catch (err) {
       lastError = new InterviewProcessingError("Anthropic API の呼び出しに失敗しました", err);
       console.error(`[${params.label}] attempt ${attempt}/${MAX_ATTEMPTS} API call failed`, err);
       continue;
     }
 
-    let input: unknown;
+    let block: Anthropic.ToolUseBlock;
     try {
-      input = extractToolInput(response, params.toolName);
+      block = extractToolUseBlock(response, params.toolName);
     } catch (err) {
       lastError = err;
       console.error(`[${params.label}] attempt ${attempt}/${MAX_ATTEMPTS} no tool_use block`, err);
       continue;
     }
 
+    const input = normalizeEscapedText(block.input);
     const result = params.schema.safeParse(input);
     if (result.success) {
       return result.data;
@@ -328,6 +336,33 @@ async function callToolWithRetry<T>(params: {
       "raw input:",
       JSON.stringify(input).slice(0, 2000)
     );
+
+    if (attempt < MAX_ATTEMPTS) {
+      // 直前の tool_use をそのまま履歴に積み、続けてエラー内容を tool_result
+      // （is_error: true）として返す。これにより、次の応答ではどこが具体的に
+      // 間違っていたかをClaude自身が把握した上で訂正できる。
+      const issues = result.error.issues
+        .slice(0, 20)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join(" / ");
+      messages.push(
+        { role: "assistant", content: response.content },
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: block.id,
+              is_error: true,
+              content:
+                `出力が期待するスキーマと一致しませんでした。次の点を修正し、` +
+                `${params.toolName} を再度呼び出してください（type・message・result 等の` +
+                `必須キーを絶対に省略しないこと）: ${issues}`,
+            },
+          ],
+        }
+      );
+    }
   }
 
   throw lastError instanceof Error
