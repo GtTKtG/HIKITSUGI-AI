@@ -7,7 +7,8 @@ import { createSubmission } from "@/lib/supabase/submissions";
 export const runtime = "nodejs";
 // 長い文字起こしや再試行（スキーマ不一致時に最大3回）でClaude呼び出しが長引く場合に
 // プラットフォーム既定のタイムアウトで打ち切られないよう、明示的に長めに確保する。
-export const maxDuration = 60;
+// チャット版で60秒でも不足する事例を確認したため、プラン上限に近い300秒まで確保する。
+export const maxDuration = 300;
 
 /**
  * POST /api/interview/process

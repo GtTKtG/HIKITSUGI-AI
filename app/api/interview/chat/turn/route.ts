@@ -17,8 +17,13 @@ export const runtime = "nodejs";
 // 会話履歴が長くなるほど1ターンのClaude呼び出し（スキーマ不一致時は最大3回再試行）が
 // タイムアウトしやすくなる。タイムアウトすると何も保存されずレスポンスも返らないため、
 // フロントエンドには「何も起きない」ように見え、再読み込みすると直前の質問に戻る
-// （＝対象者の回答が失われる）という不具合につながる。明示的に長めに確保する。
-export const maxDuration = 60;
+// （＝対象者の回答が失われる）という不具合につながる。
+//
+// 実際に60秒でも不足する事例を確認した（本番ログ「Vercel Runtime Timeout Error:
+// Task timed out after 60 seconds」）。会話が長く、業務数が多いインタビューほど
+// 完了時（done）の出力が巨大になり、1回の生成に時間がかかる。プラン上限に近い
+// 300秒（5分）まで確保する。
+export const maxDuration = 300;
 
 /**
  * POST /api/interview/chat/turn

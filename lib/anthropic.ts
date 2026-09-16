@@ -358,7 +358,10 @@ export async function processInterviewTranscript(params: {
     schema: InterviewResultSchema,
     request: {
       model: DEFAULT_MODEL,
-      max_tokens: 8192,
+      // 業務数が多い（＝内容が長い）文字起こしほど、完了時のJSON出力が大きくなる。
+      // 8192では実際に出力が途中で切られてtool_useの入力が不完全になり、
+      // スキーマ不一致→自動リトライが起きる事例を確認したため引き上げた。
+      max_tokens: 16000,
       system: HIKITSUGI_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
       tools: [BATCH_TOOL],
@@ -396,7 +399,10 @@ export async function runChatTurn(params: {
     schema: ChatTurnResponseSchema,
     request: {
       model: DEFAULT_MODEL,
-      max_tokens: 8192,
+      // 業務数が多い（＝会話が長い）インタビューほど、完了（done）時のJSON出力が
+      // 大きくなる。8192では実際に出力が途中で切られてtool_useの入力が不完全になり、
+      // スキーマ不一致→自動リトライ→タイムアウトが起きる事例を確認したため引き上げた。
+      max_tokens: 16000,
       system: HIKITSUGI_CHAT_SYSTEM_PROMPT,
       messages,
       tools: [CHAT_TOOL],
