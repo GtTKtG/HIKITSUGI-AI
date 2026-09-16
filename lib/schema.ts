@@ -45,8 +45,12 @@ export const StakeholderSchema = z.object({
  */
 export const SystemDetailSchema = z.object({
   name: z.string(),
-  url: z.string().nullable(),
-  login_id: z.string().nullable(),
+  // 以下はすべて任意（tool use のJSON Schema側も name 以外は required から
+  // 外してある。ここを .optional() にしていないと、モデルがキー自体を
+  // 省略した場合に「Required」でスキーマ検証が失敗し、doneへの遷移のたびに
+  // 自動リトライ（＝時間がかかる／最終的にタイムアウト）を誘発してしまう）。
+  url: z.string().nullable().optional().default(null),
+  login_id: z.string().nullable().optional().default(null),
   /** @deprecated 新規ヒアリングでは聞かない。過去データ読み込み用に残置。 */
   password: z.string().nullable().optional().default(null),
   login_method: z.string().nullable().optional().default(null), // 利用機能・ログイン方法
@@ -55,9 +59,9 @@ export const SystemDetailSchema = z.object({
   certificate: z.string().nullable().optional().default(null), // 電子証明書
   application_destination: z.string().nullable().optional().default(null), // 申請先
   proxy: z.string().nullable().optional().default(null), // 代理者
-  manual_location: z.string().nullable(),
-  file_location: z.string().nullable(),
-  note: z.string().nullable(),
+  manual_location: z.string().nullable().optional().default(null),
+  file_location: z.string().nullable().optional().default(null),
+  note: z.string().nullable().optional().default(null),
 });
 export type SystemDetail = z.infer<typeof SystemDetailSchema>;
 
