@@ -29,8 +29,21 @@ export default function ChatInterviewPage() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parsingFile, setParsingFile] = useState(false);
+  const [slowResponse, setSlowResponse] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 会話が長くなるほど1ターンの応答に時間がかかることがあるため、待ち時間が
+  // 長引いた場合は「まだ処理中」と分かるようにする（固まったように見えて
+  // ページを再読み込みされると、直前の回答が失われてしまうため）。
+  useEffect(() => {
+    if (!loading) {
+      setSlowResponse(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlowResponse(true), 6000);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -273,6 +286,13 @@ export default function ChatInterviewPage() {
         {done && (
           <p style={{ textAlign: "center", color: "#2e7d32", fontWeight: "bold" }}>
             インタビューが完了しました。進捗画面に移動します…
+          </p>
+        )}
+        {slowResponse && !done && (
+          <p style={{ textAlign: "center", color: "#777", fontSize: 13 }}>
+            処理に時間がかかっています。会話が長くなるほど時間がかかることがあります。
+            <br />
+            このままお待ちください（ページの再読み込みや閉じるのは避けてください。直前の回答が失われます）。
           </p>
         )}
         <div ref={bottomRef} />

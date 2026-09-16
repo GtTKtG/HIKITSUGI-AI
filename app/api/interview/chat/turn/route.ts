@@ -13,6 +13,12 @@ import { getCurrentAuth } from "@/lib/authServer";
 import { applyDeterministicScoring } from "@/lib/scoring";
 
 export const runtime = "nodejs";
+// maxDuration未設定時のプラットフォーム既定値（Hobbyプランは短い）に依存すると、
+// 会話履歴が長くなるほど1ターンのClaude呼び出し（スキーマ不一致時は最大3回再試行）が
+// タイムアウトしやすくなる。タイムアウトすると何も保存されずレスポンスも返らないため、
+// フロントエンドには「何も起きない」ように見え、再読み込みすると直前の質問に戻る
+// （＝対象者の回答が失われる）という不具合につながる。明示的に長めに確保する。
+export const maxDuration = 60;
 
 /**
  * POST /api/interview/chat/turn
