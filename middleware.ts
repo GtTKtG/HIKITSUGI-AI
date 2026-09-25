@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { ACCESS_COOKIE_NAME, GRANT_COOKIE_NAME, getExpectedAccessToken } from "@/lib/auth";
 
 // 認証ゲートを素通りさせるパス（ログイン・コード発行の入口と、静的アセット）。
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/enter"];
+// /successor, /api/successor は後任者確認（仕様書5.3）用で、対象者向けの /enter と同様、
+// 固有コード自体をゲートにするため運営者・顧客のCookieを要求しない。
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/enter", "/successor", "/api/successor"];
 
 // 運営者用マスターコードでのみアクセス可能なパス（顧客の固有コードでは入れない）。
 // /interview/transcript, /api/interview/process は「運営者が代理入力する」

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSubmission, SubmissionsUnavailableError } from "@/lib/supabase/submissions";
 import { computeCategoryBreakdown, isHandoverComplete } from "@/lib/scoring";
 import { getCurrentAuth, canAccessSubmission } from "@/lib/authServer";
+import { SuccessorReviewPanel } from "./SuccessorReviewPanel";
 
 /**
  * 仕様書8章 画面3「進捗」。
@@ -120,6 +121,8 @@ export default async function ProgressPage({ params }: { params: { id: string } 
           ))}
         </ul>
       </section>
+
+      <SuccessorReviewPanel submissionId={submission.id} />
 
       <nav style={{ display: "flex", gap: 12 }}>
         <Link href={`/preview/${submission.id}`}>引継書プレビューへ</Link>

@@ -210,3 +210,24 @@ export const ChatTurnRequestSchema = z.object({
   employee_name: z.string().optional(),
 });
 export type ChatTurnRequest = z.infer<typeof ChatTurnRequestSchema>;
+
+/* ------------------------------------------------------------------ */
+/* 後任者による再現性確認（仕様書5.3）                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 業務1件あたりの、後任者による確認状況。
+ * unreviewed: まだ確認していない / confirmed: これで対応できる /
+ * question: 質問がある（question に内容、回答が付けば answer/answered_at を埋める）。
+ */
+export const SuccessorReviewItemSchema = z.object({
+  business_name: z.string(),
+  status: z.enum(["unreviewed", "confirmed", "question"]).default("unreviewed"),
+  question: z.string().nullable().optional().default(null),
+  answer: z.string().nullable().optional().default(null),
+  answered_at: z.string().nullable().optional().default(null),
+});
+export type SuccessorReviewItem = z.infer<typeof SuccessorReviewItemSchema>;
+
+export const SuccessorReviewStatusSchema = z.enum(["pending", "in_progress", "completed"]);
+export type SuccessorReviewStatus = z.infer<typeof SuccessorReviewStatusSchema>;
