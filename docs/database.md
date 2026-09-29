@@ -130,7 +130,7 @@ erDiagram
 | code | text | UNIQUE, not null | `/successor/<code>` で使う。認証Cookie不要でこのコード自体がゲート |
 | successor_name | text | nullable | 現状UIからの入力導線はなく、常にnull運用（将来拡張の余地） |
 | status | text | `pending` \| `in_progress` \| `completed` | `pending`→`in_progress`は業務を1件でも確認した時点で自動遷移。`completed`は後任者が明示的に「確認完了」を送信した時のみ |
-| items | jsonb | not null, default `[]` | `SuccessorReviewItem[]`：`{business_name, status, question, answer, answered_at}`。発行時に対象引継書の全業務名で初期化される |
+| items | jsonb | not null, default `[]` | `SuccessorReviewItem[]`：`{kind, business_name, status, question, answer, answered_at, reflected}`。発行時に対象引継書の全業務名・全未完了案件名で初期化される。`kind`は`business`\|`unfinished_case`（旧データはbusiness扱い）。`reflected`は回答済み質問を引継書本文（`human_follow_up_note`）へ反映済みか（改善計画フェーズ0・Q29） |
 | overall_comment | text | nullable | 後任者が確認完了時に添える任意コメント |
 | created_at / updated_at | timestamptz | | |
 

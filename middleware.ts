@@ -20,10 +20,15 @@ export async function middleware(req: NextRequest) {
   }
 
   const expected = await getExpectedAccessToken();
-  // ACCESS_CODE が未設定の場合はゲートを機能させられないため、素通りさせる
-  // （開発環境や、まだ環境変数を設定していない初期デプロイでアプリ自体が
-  // 使えなくなるのを避けるため。設定後は必ずゲートが有効になる）。
   if (!expected) {
+    // 本番でACCESS_CODEが未設定＝認証ゲートを機能させられない状態。
+    // 外部レビューの指摘どおり、これを「素通り」にすると全データが誰でも見える
+    // 事故になるため、本番では fail-closed（全拒否）にする。
+    // 開発環境（NODE_ENV !== "production"）のみ、環境変数を設定する前でも
+    // アプリを触れるよう従来どおり素通りさせる。
+    if (process.env.NODE_ENV === "production") {
+      return denyMisconfigured(pathname);
+    }
     return NextResponse.next();
   }
 
@@ -53,6 +58,16 @@ function denyOrRedirect(req: NextRequest, pathname: string) {
   const loginUrl = new URL("/login", req.url);
   loginUrl.searchParams.set("next", pathname);
   return NextResponse.redirect(loginUrl);
+}
+
+/** 本番でACCESS_CODE未設定の場合に、全リクエストを拒否する（fail-closed）。 */
+function denyMisconfigured(pathname: string) {
+  const message =
+    "サーバー設定エラー：ACCESS_CODE が設定されていません。運営者に連絡してください。";
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
+  return new NextResponse(message, { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }
 
 export const config = {

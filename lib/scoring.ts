@@ -5,11 +5,17 @@ type InsufficientItem = z.infer<typeof InsufficientItemSchema>;
 
 /**
  * 仕様変更（docs/spec.md 6章）：充足率スコアを「AIの自己申告」から、
- * 8カテゴリ・配点100点の客観採点に切り替えた。属人性をなくすため、
- * スコアと必須ゲート判定は AI の出力をそのまま信用せず、この
- * ファイルが insufficient_items から決定的に算出し、サーバー側で
- * 上書きする（app/api/interview/chat/turn, process の各ルートで
+ * 8カテゴリ・配点100点の機械的採点に切り替えた。属人性をなくすため、
+ * スコアと必須ゲート判定は AI が申告する score・mandatory_gate_missing を
+ * そのまま信用せず、この関数が insufficient_items から決定的に算出し、
+ * サーバー側で上書きする（app/api/interview/chat/turn, process の各ルートで
  * applyDeterministicScoring を呼ぶ）。
+ *
+ * 注意：「機械的」なのはスコアの計算式（同じinsufficient_itemsなら必ず同じ
+ * スコアになる）の部分であり、算出元となる insufficient_items 自体は
+ * AIが判定している。したがってスコアの正確さは、insufficient_itemsの
+ * 判定精度に依存する。「客観採点」という言葉は、判定材料までAIが
+ * 客観的に見抜くかのような誤解を招くため使わない。
  *
  * カテゴリ内に複数項目がある場合（例：実施時期と期限＝頻度＋期限）は、
  * 配点をその項目数で均等に按分し、不足していない項目の分だけ加点する。
@@ -37,12 +43,17 @@ export const SCORE_CATEGORIES: ScoreCategory[] = [
  * 総合点にかかわらず「引継未完了」と判定する。
  * 「承認者・決議機関」「実務担当者・提出者」は stakeholders 項目でまとめて判定する
  * （AIが承認者検出のクロスチェックを行っているため）。
+ *
+ * 「systems」の判定基準は、システム名が固有名詞で具体的に挙がっているかのみ
+ * （6.1参照）。実際の権限付与状況までは見ていないため、ラベルを「システム権限」から
+ * 「使用システムの特定」に改称した（権限そのものの状況は access_handover が扱う。
+ * 外部レビューで、旧ラベルが権限確認まで完了しているような誤解を招くと指摘された）。
  */
 const MANDATORY_GATE_ITEMS: { item: InsufficientItem; label: string }[] = [
   { item: "deadline", label: "期限" },
   { item: "stakeholders", label: "承認者・実務担当者" },
   { item: "deliverables", label: "成果物の保存場所" },
-  { item: "systems", label: "システム権限" },
+  { item: "systems", label: "使用システムの特定" },
   { item: "failure", label: "緊急時の初動と連絡先" },
   { item: "access_handover", label: "権限移管" },
 ];

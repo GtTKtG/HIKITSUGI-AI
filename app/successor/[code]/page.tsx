@@ -28,6 +28,7 @@ export default async function SuccessorReviewPage({ params }: { params: { code: 
       companyName={submission.company_name}
       employeeName={submission.employee_name}
       businesses={submission.result.businesses}
+      unfinishedCases={submission.result.unfinished_cases}
       initialItems={review.items}
       initialStatus={review.status}
       initialOverallComment={review.overall_comment}

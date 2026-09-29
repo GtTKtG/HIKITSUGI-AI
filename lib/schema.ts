@@ -6,7 +6,7 @@ import { z } from "zod";
  *
  * 仕様変更（docs/spec.md 5.2「ヒアリング精度の改善」）：
  * 後任者が実際に業務を再現できる水準まで踏み込んでヒアリングするため、項目を
- * 拡張し、業務ごとの充足率を「8カテゴリ・配点100点」の客観採点＋必須ゲート判定
+ * 拡張し、業務ごとの充足率を「8カテゴリ・配点100点」の機械的採点＋必須ゲート判定
  * （lib/scoring.ts）に切り替えた。旧データ（拡張前のフィールドを持たない）も
  * 引き続き読み込めるよう、追加フィールドはすべて .optional().default(...) にして
  * 後方互換を確保している。
@@ -216,16 +216,22 @@ export type ChatTurnRequest = z.infer<typeof ChatTurnRequestSchema>;
 /* ------------------------------------------------------------------ */
 
 /**
- * 業務1件あたりの、後任者による確認状況。
+ * 業務・未完了案件1件あたりの、後任者による確認状況。
  * unreviewed: まだ確認していない / confirmed: これで対応できる /
  * question: 質問がある（question に内容、回答が付けば answer/answered_at を埋める）。
+ *
+ * kind: 対象が通常業務（business）か未完了案件（unfinished_case）かを区別する。
+ * 旧データ（kind未設定）は business として扱う（後方互換）。
  */
 export const SuccessorReviewItemSchema = z.object({
+  kind: z.enum(["business", "unfinished_case"]).optional().default("business"),
   business_name: z.string(),
   status: z.enum(["unreviewed", "confirmed", "question"]).default("unreviewed"),
   question: z.string().nullable().optional().default(null),
   answer: z.string().nullable().optional().default(null),
   answered_at: z.string().nullable().optional().default(null),
+  /** 回答済みの質問を引継書本文（human_follow_up_note）へ反映済みか（改善計画フェーズ0・提案Q29）。 */
+  reflected: z.boolean().optional().default(false),
 });
 export type SuccessorReviewItem = z.infer<typeof SuccessorReviewItemSchema>;
 

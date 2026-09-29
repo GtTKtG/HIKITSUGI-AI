@@ -97,3 +97,27 @@ export async function updateSubmissionResult(
   if (error) throw error;
   return data as InterviewSubmissionRow;
 }
+
+/**
+ * 後任者確認で解決した質問（successor_reviews.items[].answer）を、対象業務の
+ * human_follow_up_note に追記する（改善計画フェーズ0・提案Q29）。
+ * 現状はデータベースに蓄積されるだけで引継書本文に反映されない「死蔵データ」問題への対応。
+ * 該当する業務が見つからない場合は何もしない（呼び出し元でハンドリング）。
+ */
+export async function appendBusinessFollowUpNote(
+  submissionId: string,
+  businessName: string,
+  noteToAppend: string
+): Promise<InterviewSubmissionRow> {
+  const submission = await getSubmission(submissionId);
+  if (!submission) throw new Error("対象の引継書が見つかりません");
+
+  const businesses = submission.result.businesses.map((b) => {
+    if (b.name !== businessName) return b;
+    const existing = b.human_follow_up_note;
+    const merged = existing && existing.trim().length > 0 ? `${existing}\n${noteToAppend}` : noteToAppend;
+    return { ...b, human_follow_up_note: merged };
+  });
+
+  return updateSubmissionResult(submissionId, { ...submission.result, businesses });
+}

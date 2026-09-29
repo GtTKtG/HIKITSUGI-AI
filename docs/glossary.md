@@ -8,8 +8,8 @@
 | 業務 | `Business`（`lib/schema.ts`） | 対象者が担当している仕事の単位。成果物・期限・承認ルートが異なれば別業務として分解する（同じ名前に包括しない） |
 | 業務性格 / 管理系・企画系 | `business_type`: `"routine"` \| `"contextual"` | `routine`＝手順を固定的に定型化しやすい業務。`contextual`＝状況に応じて判断が変わり単一の正解手順に落とし込みにくい業務。深掘りする質問の重点を変える（`chat-system-prompt.ts`） |
 | 不足項目 | `insufficient_items`（`InsufficientItemSchema`） | ある業務のヒアリングで、内容が不十分と判定された項目のキー一覧（例：`"deadline"`, `"steps"`）。AIが判定し、スコア・必須ゲートの算出元になる |
-| 充足率スコア | `score` / `computeBusinessScore()` | 1業務あたりの充足度（0〜100）。AIの自己申告ではなく、`insufficient_items` から8カテゴリ・配点100点でサーバー側が決定的に算出する（`lib/scoring.ts`） |
-| 必須ゲート | `mandatory_gate_missing` / `MANDATORY_GATE_ITEMS` | 期限・承認者・成果物の保存場所・システム権限・緊急時対応・権限移管のうち、未確認のものがあれば「引継未完了」とする仕組み。スコアが高くてもゲート未達なら完了扱いにしない |
+| 充足率スコア | `score` / `computeBusinessScore()` | 1業務あたりの充足度（0〜100）。AIの自己申告ではなく、`insufficient_items` から8カテゴリ・配点100点でサーバー側が決定的に算出する（`lib/scoring.ts`）。ただし算出元の`insufficient_items`自体はAIが判定するため、スコアの正確さはAIの判定精度に依存する |
+| 必須ゲート | `mandatory_gate_missing` / `MANDATORY_GATE_ITEMS` | 期限・承認者・成果物の保存場所・使用システムの特定・緊急時対応・権限移管のうち、未確認のものがあれば「引継未完了」とする仕組み。スコアが高くてもゲート未達なら完了扱いにしない。「使用システムの特定」はシステム名が挙がっているかのみを見る（権限付与の状況は別項目の権限移管が扱う） |
 | 引継完了 | `isHandoverComplete()` | 全業務が必須ゲートを満たしている状態（＝納品可能な状態）。`docs/spec.md` 2章の「納品完了の定義」に対応 |
 | 未完了案件 | `UnfinishedCase`（`lib/schema.ts`） | 退職時点でまだ進行中の案件。通常の業務とは別の専用項目（目的・未決事項・主担当者・完了条件等）でヒアリングする |
 | 要人間フォロー | `human_follow_up_note` | AIが3回聞き返しても不足が解消しなかった項目について、運営者・後任者が人力で確認すべき内容を記録するフィールド |

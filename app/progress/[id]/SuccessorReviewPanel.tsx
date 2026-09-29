@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 
 interface SuccessorReviewItem {
+  kind?: "business" | "unfinished_case";
   business_name: string;
   status: "unreviewed" | "confirmed" | "question";
   question: string | null;
   answer: string | null;
   answered_at: string | null;
+  reflected?: boolean;
 }
 
 interface SuccessorReviewRow {
@@ -79,13 +81,37 @@ export function SuccessorReviewPanel({ submissionId }: { submissionId: string })
     }
   }
 
-  async function answerQuestion(reviewId: string, businessName: string, answer: string) {
+  async function answerQuestion(
+    reviewId: string,
+    businessName: string,
+    kind: "business" | "unfinished_case" | undefined,
+    answer: string
+  ) {
     setError(null);
     try {
       const res = await fetch(`/api/interview/${submissionId}/successor-review`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ review_id: reviewId, business_name: businessName, answer }),
+        body: JSON.stringify({ review_id: reviewId, business_name: businessName, kind, answer }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setReviews((prev) => (prev ?? []).map((r) => (r.id === reviewId ? data.review : r)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "不明なエラー");
+    }
+  }
+
+  async function reflectAnswer(reviewId: string, businessName: string) {
+    setError(null);
+    try {
+      const res = await fetch(`/api/interview/${submissionId}/successor-review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ review_id: reviewId, business_name: businessName, action: "reflect" }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -123,7 +149,8 @@ export function SuccessorReviewPanel({ submissionId }: { submissionId: string })
               key={review.id}
               review={review}
               origin={origin}
-              onAnswer={(businessName, answer) => answerQuestion(review.id, businessName, answer)}
+              onAnswer={(businessName, kind, answer) => answerQuestion(review.id, businessName, kind, answer)}
+              onReflect={(businessName) => reflectAnswer(review.id, businessName)}
             />
           ))}
 
@@ -147,10 +174,12 @@ function ReviewCard({
   review,
   origin,
   onAnswer,
+  onReflect,
 }: {
   review: SuccessorReviewRow;
   origin: string;
-  onAnswer: (businessName: string, answer: string) => void;
+  onAnswer: (businessName: string, kind: "business" | "unfinished_case" | undefined, answer: string) => void;
+  onReflect: (businessName: string) => void;
 }) {
   const confirmed = review.items.filter((i) => i.status === "confirmed").length;
   const questions = review.items.filter((i) => i.status === "question");
@@ -180,7 +209,7 @@ function ReviewCard({
         <div style={{ marginTop: 12 }}>
           <strong style={{ fontSize: 13, color: "#b36b00" }}>未回答の質問（{unanswered.length}件）</strong>
           {unanswered.map((q, i) => (
-            <QuestionRow key={i} question={q} onAnswer={(answer) => onAnswer(q.business_name, answer)} />
+            <QuestionRow key={i} question={q} onAnswer={(answer) => onAnswer(q.business_name, q.kind, answer)} />
           ))}
         </div>
       )}
@@ -193,8 +222,23 @@ function ReviewCard({
             .map((q, i) => (
               <div key={i} style={{ fontSize: 13, marginTop: 6, paddingLeft: 10, borderLeft: "2px solid #eee" }}>
                 <strong>{q.business_name}</strong>
+                {q.kind === "unfinished_case" && (
+                  <span style={{ marginLeft: 6, fontSize: 11, color: "#999" }}>（未完了案件）</span>
+                )}
                 <div>Q: {q.question}</div>
                 <div>A: {q.answer}</div>
+                {(q.kind ?? "business") === "business" &&
+                  (q.reflected ? (
+                    <span style={{ fontSize: 11, color: "#2e7d32" }}>✓ 引継書に反映済み</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onReflect(q.business_name)}
+                      style={{ marginTop: 4, padding: "3px 8px", fontSize: 11 }}
+                    >
+                      引継書に反映する
+                    </button>
+                  ))}
               </div>
             ))}
         </div>
@@ -233,6 +277,9 @@ function QuestionRow({
   return (
     <div style={{ fontSize: 13, marginTop: 8, paddingLeft: 10, borderLeft: "2px solid #f0c36d" }}>
       <strong>{question.business_name}</strong>
+      {question.kind === "unfinished_case" && (
+        <span style={{ marginLeft: 6, fontSize: 11, color: "#999" }}>（未完了案件）</span>
+      )}
       <div>Q: {question.question}</div>
       <textarea
         value={draft}

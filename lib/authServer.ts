@@ -28,10 +28,14 @@ export async function getCurrentAuth(): Promise<CurrentAuth> {
     if (grant) return { kind: "grant", grant };
   }
 
-  // ACCESS_CODE が未設定（ゲート無効の初期状態）の場合は、便宜上 admin 扱いにする
-  // （middleware側でも全面素通しにしているため、この関数内だけ挙動を変えると
-  // 画面ごとに矛盾するのを避ける）。
-  if (!expected) return { kind: "admin" };
+  // ACCESS_CODE が未設定（ゲート無効の初期状態）の場合、本番以外では便宜上 admin
+  // 扱いにする（middleware側も本番以外は全面素通しにしているため、この関数内だけ
+  // 挙動を変えると画面ごとに矛盾するのを避ける）。本番でACCESS_CODEが未設定なのは
+  // 設定不備であり、middlewareが既に全リクエストを拒否しているはずだが、念のため
+  // ここでも admin 扱いにはせず none を返す（fail-closed。外部レビュー指摘対応）。
+  if (!expected) {
+    return process.env.NODE_ENV === "production" ? { kind: "none" } : { kind: "admin" };
+  }
 
   return { kind: "none" };
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSubmission, SubmissionsUnavailableError } from "@/lib/supabase/submissions";
 import { computeCategoryBreakdown, isHandoverComplete } from "@/lib/scoring";
 import { getCurrentAuth, canAccessSubmission } from "@/lib/authServer";
+import { listSuccessorReviewsForSubmission } from "@/lib/successorReviews";
 import { SuccessorReviewPanel } from "./SuccessorReviewPanel";
 
 /**
@@ -34,6 +35,24 @@ export default async function ProgressPage({ params }: { params: { id: string } 
   const handoverComplete = result.businesses.length > 0 && isHandoverComplete(result.businesses);
   const gateFailedBusinesses = result.businesses.filter((b) => b.mandatory_gate_missing.length > 0);
 
+  let unansweredQuestions: { businessName: string; kind: "business" | "unfinished_case"; question: string }[] = [];
+  try {
+    const reviews = await listSuccessorReviewsForSubmission(submission.id);
+    unansweredQuestions = reviews.flatMap((review) =>
+      review.items
+        .filter((item) => item.status === "question" && !item.answer)
+        .map((item) => ({
+          businessName: item.business_name,
+          kind: item.kind ?? "business",
+          question: item.question ?? "",
+        }))
+    );
+  } catch {
+    // 後任者確認が未発行・未対応環境でも進捗画面自体は表示できるようにする。
+  }
+
+  const criticalItemsCount = gateFailedBusinesses.length + unansweredQuestions.length;
+
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
       <h1>進捗</h1>
@@ -55,16 +74,44 @@ export default async function ProgressPage({ params }: { params: { id: string } 
         {handoverComplete ? "✓ 必須ゲートを満たしています（引継完了の要件を充足）" : "✗ 引継未完了（必須項目が未確認の業務があります）"}
       </div>
 
-      {gateFailedBusinesses.length > 0 && (
-        <section style={{ marginBottom: 24 }}>
-          <h2>必須ゲート未達の業務</h2>
-          <ul>
-            {gateFailedBusinesses.map((b, i) => (
-              <li key={i}>
-                <strong>{b.name}</strong>: {b.mandatory_gate_missing.join("、")} が未確認
-              </li>
-            ))}
-          </ul>
+      {criticalItemsCount > 0 && (
+        <section
+          style={{
+            marginBottom: 24,
+            padding: "12px 16px",
+            border: "2px solid #c62828",
+            borderRadius: 6,
+            background: "#fff8f7",
+          }}
+        >
+          <h2 style={{ marginTop: 0, color: "#c62828" }}>
+            退職前に解消が必要な重大事項（{criticalItemsCount}件）
+          </h2>
+          {gateFailedBusinesses.length > 0 && (
+            <>
+              <p style={{ fontWeight: "bold", marginBottom: 4 }}>必須ゲート未達の業務</p>
+              <ul style={{ marginTop: 0 }}>
+                {gateFailedBusinesses.map((b, i) => (
+                  <li key={i}>
+                    <strong>{b.name}</strong>: {b.mandatory_gate_missing.join("、")} が未確認
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {unansweredQuestions.length > 0 && (
+            <>
+              <p style={{ fontWeight: "bold", marginBottom: 4 }}>後任者からの未回答の質問</p>
+              <ul style={{ marginTop: 0 }}>
+                {unansweredQuestions.map((q, i) => (
+                  <li key={i}>
+                    <strong>{q.businessName}</strong>
+                    {q.kind === "unfinished_case" ? "（未完了案件）" : ""}: {q.question}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
 

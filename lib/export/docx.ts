@@ -9,8 +9,9 @@ import {
   TableCell,
   WidthType,
 } from "docx";
-import type { InterviewResult, SystemDetail, UnfinishedCase } from "@/lib/schema";
+import type { Business, InterviewResult, SystemDetail, UnfinishedCase } from "@/lib/schema";
 import { isHandoverComplete } from "@/lib/scoring";
+import { buildFirstStepSummary } from "@/lib/firstStep";
 
 /**
  * 引継書パッケージをWord（.docx）として生成する。
@@ -69,6 +70,7 @@ export async function buildHandoverDocx(params: {
         })
       );
     }
+    children.push(...buildFirstStepParagraphs(business));
     children.push(
       labeledParagraph("目的・対象", business.purpose),
       labeledParagraph("頻度・実施時期", business.frequency),
@@ -150,6 +152,40 @@ export async function buildHandoverDocx(params: {
   });
 
   return Packer.toBuffer(doc);
+}
+
+/**
+ * 業務ごとの「最初の一歩」カード（改善計画フェーズ0・提案Q16）。
+ * 既存フィールドの組み合わせのみで合成する（新規ヒアリング項目は増やさない）。
+ */
+function buildFirstStepParagraphs(business: Business): Paragraph[] {
+  const summary = buildFirstStepSummary(business);
+  if (!summary) return [];
+
+  const rows = (
+    [
+      ["いつ始めるか", summary.when],
+      ["最初に開くもの", summary.whatToOpen],
+      ["最初に連絡する人", summary.whoToContact],
+      ["何ができれば完了か", summary.doneWhen],
+      ["最も注意する点", summary.watchOutFor],
+    ] as [string, string | null][]
+  ).filter((row): row is [string, string] => row[1] !== null);
+
+  if (rows.length === 0) return [];
+
+  return [
+    new Paragraph({
+      children: [new TextRun({ text: "最初の一歩", bold: true, color: "1F3A52" })],
+    }),
+    ...rows.map(
+      ([label, value]) =>
+        new Paragraph({
+          indent: { left: 360 },
+          children: [new TextRun({ text: `${label}: `, bold: true }), new TextRun(value)],
+        })
+    ),
+  ];
 }
 
 function labeledParagraph(label: string, value: string | null): Paragraph {

@@ -1,13 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Business, SuccessorReviewItem, SuccessorReviewStatus } from "@/lib/schema";
+import type { Business, SuccessorReviewItem, SuccessorReviewStatus, UnfinishedCase } from "@/lib/schema";
+import { buildFirstStepSummary } from "@/lib/firstStep";
+
+type ItemKind = "business" | "unfinished_case";
 
 export function SuccessorReviewClient({
   code,
   companyName,
   employeeName,
   businesses,
+  unfinishedCases,
   initialItems,
   initialStatus,
   initialOverallComment,
@@ -16,6 +20,7 @@ export function SuccessorReviewClient({
   companyName: string | null;
   employeeName: string | null;
   businesses: Business[];
+  unfinishedCases: UnfinishedCase[];
   initialItems: SuccessorReviewItem[];
   initialStatus: SuccessorReviewStatus;
   initialOverallComment: string | null;
@@ -24,12 +29,12 @@ export function SuccessorReviewClient({
   const [status, setStatus] = useState<SuccessorReviewStatus>(initialStatus);
   const [overallComment, setOverallComment] = useState(initialOverallComment ?? "");
   const [error, setError] = useState<string | null>(null);
-  const [savingBusiness, setSavingBusiness] = useState<string | null>(null);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
 
-  const itemByName = useMemo(() => {
+  const itemByKey = useMemo(() => {
     const map = new Map<string, SuccessorReviewItem>();
-    for (const item of items) map.set(item.business_name, item);
+    for (const item of items) map.set(`${item.kind ?? "business"}:${item.business_name}`, item);
     return map;
   }, [items]);
 
@@ -37,8 +42,12 @@ export function SuccessorReviewClient({
   const questionCount = items.filter((i) => i.status === "question").length;
   const unreviewedCount = items.filter((i) => i.status === "unreviewed").length;
 
-  async function submitItem(businessName: string, next: { status: "confirmed" | "question"; question?: string }) {
-    setSavingBusiness(businessName);
+  async function submitItem(
+    name: string,
+    kind: ItemKind,
+    next: { status: "confirmed" | "question"; question?: string }
+  ) {
+    setSavingKey(`${kind}:${name}`);
     setError(null);
     try {
       const res = await fetch(`/api/successor/${code}`, {
@@ -46,7 +55,8 @@ export function SuccessorReviewClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "item",
-          business_name: businessName,
+          business_name: name,
+          kind,
           status: next.status,
           question: next.question ?? null,
         }),
@@ -61,7 +71,7 @@ export function SuccessorReviewClient({
     } catch (err) {
       setError(err instanceof Error ? err.message : "不明なエラー");
     } finally {
-      setSavingBusiness(null);
+      setSavingKey(null);
     }
   }
 
@@ -107,7 +117,7 @@ export function SuccessorReviewClient({
           fontSize: 14,
         }}
       >
-        <span>対象業務: {items.length}件</span>
+        <span>対象項目: {items.length}件（業務 {businesses.length} / 未完了案件 {unfinishedCases.length}）</span>
         <span style={{ color: "#2e7d32" }}>対応できる: {confirmedCount}</span>
         <span style={{ color: "#b36b00" }}>質問あり: {questionCount}</span>
         <span style={{ color: "#666" }}>未確認: {unreviewedCount}</span>
@@ -131,18 +141,39 @@ export function SuccessorReviewClient({
       {error && <p style={{ color: "crimson" }}>{error}</p>}
 
       {businesses.map((business, i) => {
-        const item = itemByName.get(business.name);
+        const item = itemByKey.get(`business:${business.name}`);
         return (
           <BusinessReviewCard
             key={i}
             business={business}
             item={item}
-            saving={savingBusiness === business.name}
-            onConfirm={() => submitItem(business.name, { status: "confirmed" })}
-            onAskQuestion={(question) => submitItem(business.name, { status: "question", question })}
+            saving={savingKey === `business:${business.name}`}
+            onConfirm={() => submitItem(business.name, "business", { status: "confirmed" })}
+            onAskQuestion={(question) => submitItem(business.name, "business", { status: "question", question })}
           />
         );
       })}
+
+      {unfinishedCases.length > 0 && (
+        <>
+          <h2 style={{ marginTop: 28 }}>進行中の未完了案件</h2>
+          {unfinishedCases.map((unfinishedCase, i) => {
+            const item = itemByKey.get(`unfinished_case:${unfinishedCase.name}`);
+            return (
+              <UnfinishedCaseReviewCard
+                key={i}
+                unfinishedCase={unfinishedCase}
+                item={item}
+                saving={savingKey === `unfinished_case:${unfinishedCase.name}`}
+                onConfirm={() => submitItem(unfinishedCase.name, "unfinished_case", { status: "confirmed" })}
+                onAskQuestion={(question) =>
+                  submitItem(unfinishedCase.name, "unfinished_case", { status: "question", question })
+                }
+              />
+            );
+          })}
+        </>
+      )}
 
       <section style={{ marginTop: 28, padding: 16, background: "#f7f7f7", borderRadius: 8 }}>
         <h2 style={{ marginTop: 0 }}>全体を通しての感想・懸念（任意）</h2>
@@ -210,6 +241,7 @@ function BusinessReviewCard({
       </summary>
 
       <div style={{ marginTop: 12 }}>
+        <FirstStepBox business={business} />
         <Field label="目的・対象" value={business.purpose} />
         <Field label="頻度・実施時期" value={business.frequency} />
         <Field label="開始条件" value={business.trigger} />
@@ -318,6 +350,151 @@ function BusinessReviewCard({
         )}
       </div>
     </details>
+  );
+}
+
+function UnfinishedCaseReviewCard({
+  unfinishedCase,
+  item,
+  saving,
+  onConfirm,
+  onAskQuestion,
+}: {
+  unfinishedCase: UnfinishedCase;
+  item: SuccessorReviewItem | undefined;
+  saving: boolean;
+  onConfirm: () => void;
+  onAskQuestion: (question: string) => void;
+}) {
+  const [questionDraft, setQuestionDraft] = useState(item?.question ?? "");
+  const [showQuestionBox, setShowQuestionBox] = useState(item?.status === "question");
+
+  const statusBadge =
+    item?.status === "confirmed"
+      ? { text: "✅ 対応できる", color: "#2e7d32" }
+      : item?.status === "question"
+        ? { text: "❓ 質問あり", color: "#b36b00" }
+        : { text: "⬜ 未確認", color: "#999" };
+
+  return (
+    <details
+      style={{
+        border: "1px solid #ddd",
+        borderRadius: 8,
+        marginBottom: 12,
+        padding: "10px 14px",
+      }}
+      open={item?.status !== "confirmed"}
+    >
+      <summary style={{ cursor: "pointer", fontWeight: "bold" }}>
+        {unfinishedCase.name}
+        <span style={{ marginLeft: 10, fontSize: 13, color: statusBadge.color }}>{statusBadge.text}</span>
+      </summary>
+
+      <div style={{ marginTop: 12 }}>
+        <Field label="現在のステータス" value={unfinishedCase.progress} />
+        <Field label="次のアクション" value={unfinishedCase.next_action} />
+        <Field label="最終期限" value={unfinishedCase.deadline} />
+        <Field label="目的・対象範囲・背景" value={unfinishedCase.purpose_scope} />
+        <Field label="未決事項・懸念事項・依存関係" value={unfinishedCase.open_issues} />
+        <Field label="主担当者" value={unfinishedCase.owner} />
+        <Field label="意思決定者" value={unfinishedCase.decision_maker} />
+        <Field label="相手方の窓口" value={unfinishedCase.counterpart} />
+        <Field label="関連資料・打合せ記録の所在" value={unfinishedCase.related_materials_location} />
+        <Field label="放置・遅延した場合の影響" value={unfinishedCase.impact_if_neglected} />
+        <Field label="完了条件" value={unfinishedCase.completion_condition} />
+        <Field label="完了を確認する者" value={unfinishedCase.completion_confirmer} />
+        <Field label="次回予定日" value={unfinishedCase.next_review_date} />
+
+        {item?.answer && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: 10,
+              background: "#eef7ee",
+              borderRadius: 6,
+              fontSize: 13,
+            }}
+          >
+            <strong>質問: </strong>
+            {item.question}
+            <br />
+            <strong>回答: </strong>
+            {item.answer}
+          </div>
+        )}
+
+        <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <button type="button" onClick={onConfirm} disabled={saving} style={{ padding: "6px 12px" }}>
+            ✅ これで対応できます
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowQuestionBox((v) => !v)}
+            disabled={saving}
+            style={{ padding: "6px 12px" }}
+          >
+            ❓ 質問がある
+          </button>
+        </div>
+
+        {showQuestionBox && (
+          <div style={{ marginTop: 8 }}>
+            <textarea
+              value={questionDraft}
+              onChange={(e) => setQuestionDraft(e.target.value)}
+              rows={2}
+              style={{ width: "100%", padding: 8, boxSizing: "border-box" }}
+              placeholder="例：次の意思決定はいつまでに必要ですか？"
+            />
+            <button
+              type="button"
+              onClick={() => onAskQuestion(questionDraft)}
+              disabled={saving || !questionDraft.trim()}
+              style={{ marginTop: 6, padding: "6px 12px" }}
+            >
+              この質問を送信
+            </button>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function FirstStepBox({ business }: { business: Business }) {
+  const summary = buildFirstStepSummary(business);
+  if (!summary) return null;
+
+  const rows: [string, string | null][] = [
+    ["いつ始めるか", summary.when],
+    ["最初に開くもの", summary.whatToOpen],
+    ["最初に連絡する人", summary.whoToContact],
+    ["何ができれば完了か", summary.doneWhen],
+    ["最も注意する点", summary.watchOutFor],
+  ];
+  const filled = rows.filter(([, v]) => v !== null) as [string, string][];
+  if (filled.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        background: "#eef3f8",
+        border: "1px solid #cfe0ee",
+        borderRadius: 6,
+        padding: 10,
+        marginBottom: 10,
+        fontSize: 13,
+      }}
+    >
+      <div style={{ fontWeight: "bold", marginBottom: 4, color: "#1f3a52" }}>最初の一歩</div>
+      {filled.map(([label, value]) => (
+        <div key={label}>
+          <strong>{label}: </strong>
+          {value}
+        </div>
+      ))}
+    </div>
   );
 }
 

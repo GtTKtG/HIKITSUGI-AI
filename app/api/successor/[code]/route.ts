@@ -35,6 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: { code: strin
         company_name: submission.company_name,
         employee_name: submission.employee_name,
         businesses: submission.result.businesses,
+        unfinished_cases: submission.result.unfinished_cases,
       },
     });
   } catch (err) {
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { code: strin
     const payload = body as {
       action?: "item" | "complete";
       business_name?: string;
+      kind?: "business" | "unfinished_case";
       status?: "confirmed" | "question";
       question?: string;
       overall_comment?: string;
@@ -82,6 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: { code: strin
     const review = await updateSuccessorReviewItem({
       code: params.code,
       businessName: payload.business_name,
+      kind: payload.kind,
       status: payload.status,
       question: payload.question ?? null,
     });

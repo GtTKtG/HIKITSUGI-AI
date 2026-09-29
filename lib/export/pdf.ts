@@ -2,8 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFPage, type PDFFont } from "pdf-lib";
-import type { InterviewResult, SystemDetail, UnfinishedCase } from "@/lib/schema";
+import type { Business, InterviewResult, SystemDetail, UnfinishedCase } from "@/lib/schema";
 import { isHandoverComplete } from "@/lib/scoring";
+import { buildFirstStepSummary } from "@/lib/firstStep";
 
 /**
  * 引継書パッケージをPDFとして生成する。
@@ -60,6 +61,7 @@ export async function buildHandoverPdf(params: {
         { color: rgb(0.33, 0.33, 0.33) }
       );
     }
+    writeFirstStep(writer, business);
     writer.field("目的・対象", business.purpose);
     writer.field("頻度・実施時期", business.frequency);
     writer.field("開始条件", business.trigger);
@@ -116,6 +118,30 @@ export async function buildHandoverPdf(params: {
 
   const bytes = await pdfDoc.save();
   return Buffer.from(bytes);
+}
+
+/**
+ * 業務ごとの「最初の一歩」カード（改善計画フェーズ0・提案Q16）。
+ * 既存フィールドの組み合わせのみで合成する（新規ヒアリング項目は増やさない）。
+ */
+function writeFirstStep(writer: PdfWriter, business: Business) {
+  const summary = buildFirstStepSummary(business);
+  if (!summary) return;
+
+  const rows: [string, string | null][] = [
+    ["いつ始めるか", summary.when],
+    ["最初に開くもの", summary.whatToOpen],
+    ["最初に連絡する人", summary.whoToContact],
+    ["何ができれば完了か", summary.doneWhen],
+    ["最も注意する点", summary.watchOutFor],
+  ];
+  const filled = rows.filter(([, v]) => v !== null) as [string, string][];
+  if (filled.length === 0) return;
+
+  writer.text("最初の一歩", { bold: true, color: rgb(0.12, 0.23, 0.32) });
+  for (const [label, value] of filled) {
+    writer.text(`　　${label}: ${value}`);
+  }
 }
 
 /**

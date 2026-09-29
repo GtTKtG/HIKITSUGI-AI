@@ -117,8 +117,9 @@ Word（`.docx`）またはPDFを生成してダウンロードさせる。`forma
 
 ### `POST /api/interview/[id]/successor-review` — 運営者 or grant
 
-後任者確認用の新しいコード（専用リンク）を発行する。対象引継書の全業務名で
-`items` を初期化する。業務が0件の場合は `400`。
+後任者確認用の新しいコード（専用リンク）を発行する。対象引継書の全業務名・全未完了案件名で
+`items` を初期化する（`kind: "business" | "unfinished_case"`）。業務・未完了案件が
+両方とも0件の場合は `400`。
 
 ```json
 // request（任意）
@@ -129,11 +130,22 @@ Word（`.docx`）またはPDFを生成してダウンロードさせる。`forma
 
 ### `PATCH /api/interview/[id]/successor-review` — 運営者 or grant
 
-後任者からの質問に、前任者・運営者が回答する。
+`action` 省略時（既定）：後任者からの質問に、前任者・運営者が回答する。
 
 ```json
 // request
-{ "review_id": "uuid", "business_name": "string", "answer": "string" }
+{ "review_id": "uuid", "business_name": "string", "kind"?: "business" | "unfinished_case", "answer": "string" }
+// response
+{ "review": SuccessorReviewRow }
+```
+
+`action: "reflect"`：回答済みの質問を、対象業務の `human_follow_up_note` へ追記し
+`items[].reflected` を立てる（改善計画フェーズ0・Q29）。現状 `kind: "business"` のみ対応
+（未完了案件には反映先フィールドが無いため `400`）。
+
+```json
+// request
+{ "review_id": "uuid", "business_name": "string", "action": "reflect" }
 // response
 { "review": SuccessorReviewRow }
 ```
@@ -144,7 +156,8 @@ Word（`.docx`）またはPDFを生成してダウンロードさせる。`forma
 
 ```json
 { "review": SuccessorReviewRow,
-  "submission": { "id", "company_name", "employee_name", "businesses": Business[] } }
+  "submission": { "id", "company_name", "employee_name",
+    "businesses": Business[], "unfinished_cases": UnfinishedCase[] } }
 ```
 
 コードが存在しない場合は `404`。

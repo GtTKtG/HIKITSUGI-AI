@@ -55,7 +55,7 @@ app/
 lib/
   anthropic.ts               Anthropic API呼び出し・tool useスキーマ・リトライ制御
   schema.ts                  zodスキーマ（全データ形状の単一の正）
-  scoring.ts                 客観採点・必須ゲート判定ロジック（決定的・AI出力を信用しない）
+  scoring.ts                 機械的採点・必須ゲート判定ロジック（insufficient_itemsから決定的に算出。判定材料自体の精度はAI依存）
   auth.ts / authServer.ts    認証（マスターコード／固有コードの2階層）
   grants.ts                  顧客固有コード（access_grants）のCRUD
   successorReviews.ts        後任者確認（successor_reviews）のCRUD

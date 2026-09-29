@@ -53,17 +53,19 @@ function parseRow(data: Record<string, unknown>): SuccessorReviewRow {
 export async function createSuccessorReview(params: {
   submissionId: string;
   successorName?: string | null;
-  businessNames: string[];
+  items: { name: string; kind: "business" | "unfinished_case" }[];
 }): Promise<SuccessorReviewRow> {
   const supabase = getSupabaseServerClient();
   if (!supabase) throw new SubmissionsUnavailableError();
 
-  const items: SuccessorReviewItem[] = params.businessNames.map((name) => ({
+  const items: SuccessorReviewItem[] = params.items.map(({ name, kind }) => ({
+    kind,
     business_name: name,
     status: "unreviewed",
     question: null,
     answer: null,
     answered_at: null,
+    reflected: false,
   }));
 
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -131,18 +133,20 @@ export async function listSuccessorReviewsForSubmission(
   return (data ?? []).map(parseRow);
 }
 
-/** 後任者が1件の業務について「対応できる／質問がある」を記録する。 */
+/** 後任者が1件の業務・未完了案件について「対応できる／質問がある」を記録する。 */
 export async function updateSuccessorReviewItem(params: {
   code: string;
   businessName: string;
+  kind?: "business" | "unfinished_case";
   status: "confirmed" | "question";
   question?: string | null;
 }): Promise<SuccessorReviewRow> {
   const review = await getSuccessorReviewByCode(params.code);
   if (!review) throw new Error("指定された後任者確認が見つかりません");
+  const kind = params.kind ?? "business";
 
   const items = review.items.map((item) =>
-    item.business_name === params.businessName
+    item.business_name === params.businessName && (item.kind ?? "business") === kind
       ? {
           ...item,
           status: params.status,
@@ -159,14 +163,39 @@ export async function updateSuccessorReviewItem(params: {
 export async function answerSuccessorReviewItem(params: {
   reviewId: string;
   businessName: string;
+  kind?: "business" | "unfinished_case";
   answer: string;
 }): Promise<SuccessorReviewRow> {
   const review = await getSuccessorReviewById(params.reviewId);
   if (!review) throw new Error("指定された後任者確認が見つかりません");
+  const kind = params.kind ?? "business";
 
   const items = review.items.map((item) =>
-    item.business_name === params.businessName
+    item.business_name === params.businessName && (item.kind ?? "business") === kind
       ? { ...item, answer: params.answer, answered_at: new Date().toISOString() }
+      : item
+  );
+
+  return persistReview(review.id, { items });
+}
+
+/**
+ * 回答済みの質問を引継書本文へ反映済みとしてマークする（改善計画フェーズ0・提案Q29）。
+ * 本文への実際の追記（lib/supabase/submissions.ts の appendBusinessFollowUpNote）は
+ * 呼び出し元で行い、成功した後にこの関数でフラグを立てる。
+ */
+export async function markSuccessorReviewItemReflected(params: {
+  reviewId: string;
+  businessName: string;
+  kind?: "business" | "unfinished_case";
+}): Promise<SuccessorReviewRow> {
+  const review = await getSuccessorReviewById(params.reviewId);
+  if (!review) throw new Error("指定された後任者確認が見つかりません");
+  const kind = params.kind ?? "business";
+
+  const items = review.items.map((item) =>
+    item.business_name === params.businessName && (item.kind ?? "business") === kind
+      ? { ...item, reflected: true }
       : item
   );
 
