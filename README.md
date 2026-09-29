@@ -1,7 +1,21 @@
 # HIKITSUGI-AI
 
 退職・異動者へAIが直接チャットでインタビューし、後任者向けの引継書パッケージを
-作成するサービス。詳細な事業設計・機能設計は `docs/spec.md` を参照。
+作成するサービス。
+
+## ドキュメント
+
+| ドキュメント | 内容 |
+|---|---|
+| `docs/spec.md` | 事業設計・機能仕様（要件定義）。ヒアリング設計・判定ロジックの「なぜ」はここ |
+| `docs/architecture.md` | システム全体像・ディレクトリ構成・主要フロー・認可モデル |
+| `docs/database.md` | ER図・テーブル定義・マイグレーション一覧 |
+| `docs/api.md` | 全APIエンドポイントの仕様（リクエスト/レスポンス） |
+| `docs/runbook.md` | デプロイ手順・既知障害と対処・監視手順 |
+| `docs/glossary.md` | ドメイン用語集 |
+
+初めて触る場合は `architecture.md` → `glossary.md` の順で読むと全体像を掴みやすい。
+何か直す前には `runbook.md` の既知障害一覧に同じ症状がないか確認する。
 
 ## 現在の実装範囲（優先順位1〜2）
 
@@ -20,6 +34,12 @@
     再質問・要人間フォローの一覧）
   - `/preview/[id]` — 引継書プレビュー（内容を修正して保存可能）
   - `/export/[id]` — 出力（Word `.docx` / PDF ダウンロード）
+- **業務の性格による質問分岐**（仕様書5.1）：業務ごとに「管理系（定型）」「企画系
+  （状況に応じた判断が中心）」を判定し、企画系業務では固定手順の代わりに判断の
+  拠り所・関係者への配慮を深掘りする（`business_type`）
+- **後任者による再現性確認**（仕様書5.3）：引継書完成後、後任者へ専用リンク
+  （`/successor/<code>`）を発行し、業務ごとに「対応できる／質問がある」を確認して
+  もらう。質問は進捗画面（`/progress/[id]`）から前任者・運営者が回答できる
 - DB保存は Supabase（`interview_chat_sessions` でチャットの会話状態を保持し、
   完了時に `interview_submissions` へ結果を書き出す。進捗／プレビュー／出力画面は
   `interview_submissions` を共通で参照する）。**チャット・バッチとも、結果をIDで
@@ -62,66 +82,17 @@ Supabase を使う場合は `supabase/migrations/` 配下のマイグレーシ�
 
 ```
 /interview（チャット版AIインタビュー）─┐
-/interview/transcript（文字起こし方式）─┴→ /progress/[id]（進捗確認）
+/interview/transcript（文字起こし方式）─┴→ /progress/[id]（進捗確認・後任者確認リンク発行）
                                             → /preview/[id]（引継書プレビュー・修正）
                                               → /export/[id]（Word / PDF 出力）
+
+/progress/[id] --[リンク発行]--> /successor/<code>（後任者による再現性確認）
 ```
 
 ## API
 
-### `GET /api/admin/grants` / `POST /api/admin/grants`（運営者専用）
-
-案件の一覧取得・新規作成。`POST` は `{ company_name?, employee_name? }` を受け取り、
-固有コードを発行した `grant` を返す。
-
-### `GET /enter/<code>`
-
-顧客固有コードでのワンクリック入場リンク。正しければCookieを発行し、
-未着手なら `/interview`、完了済みなら `/progress/[id]` へリダイレクトする。
-
-### `POST /api/interview/chat/turn`（チャット版・本線）
-
-```json
-{
-  "session_id": "省略可（初回は省略してセッションを新規作成）",
-  "message": "対象者の発言（初回は省略可）",
-  "company_name": "任意（初回のみ）",
-  "employee_name": "任意（初回のみ）"
-}
-```
-
-- レスポンス：`{ "session_id", "done", "message", "submission_id"? }`
-- `done: false` の間は `message`（AIからの次の質問）を表示し、対象者の回答を
-  `message` に入れて同じ `session_id` で呼び続ける。
-- `done: true` になったら、`submission_id` で `/progress/[id]` 等に遷移する。
-
-### `POST /api/interview/process`（バッチ版・代替運用）
-
-```json
-{
-  "transcript": "（文字起こし本文）",
-  "interview_round": 1,
-  "company_name": "任意",
-  "employee_name": "任意"
-}
-```
-
-- `interview_round`: 1〜3（省略時1）。再質問後の2回目・3回目は、この値を
-  インクリメントして同じ形式で再送する（仕様書 6.4）。
-- レスポンスは `submission_id`（Supabase保存先ID。DB未設定時は null）と、
-  仕様書 7.2 のJSON形式を含む `result` を返す。
-
-### `GET /api/interview/[id]`
-
-保存済みの処理結果を取得する。
-
-### `PATCH /api/interview/[id]`
-
-引継書プレビュー画面での修正内容（7.2のJSON形式全体）を保存する。
-
-### `GET /api/interview/[id]/export?format=docx|pdf`
-
-Word または PDF をダウンロードする。
+全エンドポイントの仕様（リクエスト/レスポンス形式・認可要件）は
+[`docs/api.md`](docs/api.md) を参照。
 
 ## 動作確認
 
